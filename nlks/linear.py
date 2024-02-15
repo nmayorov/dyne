@@ -52,12 +52,13 @@ def run_linear_kalman_smoother(x0, P0, Fs, Gs, Qs, zs, Hs, Rs, us=None, ws=None)
     Po = []
     wo = []
     Qo = []
-    for x, P, F, G, Q, H, U, r, M in zip(
+    for x, P, F, G, Q, w, H, U, r, M in zip(
         reversed(xf),
         reversed(Pf),
         reversed(Fs),
         reversed(Gs),
         reversed(Qs),
+        reversed(ws),
         reversed(Hs),
         reversed(Us),
         reversed(rs),
@@ -65,7 +66,7 @@ def run_linear_kalman_smoother(x0, P0, Fs, Gs, Qs, zs, Hs, Rs, us=None, ws=None)
     ):
         xo.append(x + P @ lamb)
         Po.append(P - P @ Lamb @ P)
-        wo.append(Q @ G.T @ lamb)
+        wo.append(w + Q @ G.T @ lamb)
         Qo.append(Q - Q @ G.T @ Lamb @ G @ Q)
 
         lamb = U.T @ lamb + r
