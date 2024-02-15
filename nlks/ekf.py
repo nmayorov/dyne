@@ -1,6 +1,8 @@
 """Extended Kalman Filter."""
 import numpy as np
 from .linear import kf_update
+from ._common import verify_array, verify_function
+from itertools import chain
 
 
 def run_ekf(X0, P0, fs, Qs, Zs, hs, Rs, n_epoch):
