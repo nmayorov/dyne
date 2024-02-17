@@ -89,10 +89,11 @@ def run_optimization(X0, P0, fs, Qs, Zs, hs, Rs, n_epoch, ftol=1e-8, max_iter=10
     mu = 1.0
     for iteration in range(max_iter):
         x0, Fs, Gs, zs, Hs, us, ws, cost = _build_lp(Xo, Wo)
-        _, _, xo, Po, wo, Qo = run_linear_kalman_smoother(x0, P0, Fs, Gs, Qs, zs, Hs,
-                                                          Rs, us, ws)
+        linear_result = run_linear_kalman_smoother(x0, P0, Fs, Gs, Qs, zs, Hs, Rs, us,
+                                                   ws)
         qp_cost_change, qp_grad_dot_step = _eval_quadratic_step(x0, P0, Qs, zs, Hs, Rs,
-                                                                ws, xo, wo)
+                                                                ws, linear_result.xo,
+                                                                linear_result.wo)
         cv_l1 = _eval_cv_norm(us)
         mu = max(mu, qp_cost_change / (1 - RHO) / cv_l1)
         D = qp_grad_dot_step - mu * cv_l1
@@ -102,9 +103,9 @@ def run_optimization(X0, P0, fs, Qs, Zs, hs, Rs, n_epoch, ftol=1e-8, max_iter=10
         while alpha > MIN_ALPHA:
             Xo_new = []
             Wo_new = []
-            for X, x in zip(Xo, xo):
+            for X, x in zip(Xo, linear_result.xo):
                 Xo_new.append(X + alpha * x)
-            for W, w in zip(Wo, wo):
+            for W, w in zip(Wo, linear_result.wo):
                 Wo_new.append(W + alpha * w)
 
             x0, Fs, Gs, zs, Hs, us, ws, cost_new = _build_lp(Xo_new, Wo_new)

@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import linalg
+from ._common import Bunch
 
 
 def run_linear_kalman_smoother(x0, P0, Fs, Gs, Qs, zs, Hs, Rs, us=None, ws=None):
@@ -93,7 +94,7 @@ def run_linear_kalman_smoother(x0, P0, Fs, Gs, Qs, zs, Hs, Rs, us=None, ws=None)
         wo = np.asarray(wo)
         Qo = np.asarray(Qo)
 
-    return xf, Pf, xo, Po, wo, Qo
+    return Bunch(xf=xf, Pf=Pf, xo=xo, Po=Po, wo=wo, Qo=Qo)
 
 
 def kf_update(x, P, z, H, R):
