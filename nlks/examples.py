@@ -21,7 +21,8 @@ def generate_linear_pendulum(
         dx1 / dt = x2
         dx2 / dt = -omega**2 * x1 - 2 * eta * omega * x2 + f
 
-    with ``f`` being an external force. It is discretized with a time step `tau`.
+    with ``f`` being an external force. It is discretized with a time step `tau`,
+    the external force is modeled as a random white sequence.
 
     The measurements consist of both x1 and x2 (angle and angular rate).
     """
@@ -54,21 +55,36 @@ def generate_linear_pendulum(
 
 
 def generate_nonlinear_pendulum(
-    n_epoch=1000,
+    n_epochs=1000,
     X0=np.array([0.5 * np.pi, 0]),
     P0=np.diag([0.1**2, 0.05**2]),
     tau=0.1,
     T=10.0,
     eta=0.5,
     xi=1.0,
-    Q=np.diag([0.1**2, 0.01**2, 0.5**2]),
-    sigma_angle=0.1,
+    sigma_omega=0.1,
+    sigma_eta=0.01,
+    sigma_f=0.5,
+    sigma_measurement_x=0.1,
     rng=0
 ):
+    """Prepare data for an example of nonlinear pendulum with friction.
+
+    The continuous time system model is::
+
+        dx1 / dt = x2
+        dx2 / dt = -omega**2 * sin(x1) - 2 * eta * omega * x2 * (1 + xi * x2**2) + f
+
+    with ``f`` being an external force. It is discretized with a time step `tau`.
+    It is discretized with a time step `tau`. The parameters ``omega`` and ``eta`` are
+    randomly perturbed by noise at each epoch, the external force is modeled as a
+    random white sequence.
+    """
     rng = check_random_state(rng)
     omega = 2 * np.pi / T
+    Q = np.diag([sigma_omega**2, sigma_eta**2, sigma_f**2])
 
-    def f(X, W=None):
+    def f(k, X, W=None):
         if W is None:
             W = np.zeros(3)
 
@@ -92,23 +108,22 @@ def generate_nonlinear_pendulum(
         ])
         return X_next, F, G
 
-    def h(X):
+    def h(k, X):
         return np.array([np.sin(X[0])]), np.array([[np.cos(X[0]), 0]])
 
-    R = np.array([[sigma_angle ** 2]])
-
+    R = np.array([[sigma_measurement_x ** 2]])
     X = rng.multivariate_normal(X0, P0)
-    Xs = np.empty((n_epoch, 2))
-    Ws = np.empty((n_epoch - 1, 3))
-    Zs = np.empty((n_epoch, 1))
+    Xt = np.empty((n_epochs, 2))
+    Wt = np.empty((n_epochs - 1, 3))
+    measurements = []
 
-    for epoch in range(n_epoch):
-        Xs[epoch] = X
-        Zs[epoch] = h(X)[0] + rng.multivariate_normal(np.zeros(len(R)), R)
+    for k in range(n_epochs):
+        Xt[k] = X
+        Z = h(k, X)[0] + rng.multivariate_normal(np.zeros(len(R)), R)
+        measurements.append([(Z, h, R)])
 
-        if epoch + 1 < n_epoch:
-            W = rng.multivariate_normal(np.zeros(len(Q)), Q)
-            Ws[epoch] = W
-            X, *_ = f(X, W)
+        if k + 1 < n_epochs:
+            Wt[k] = rng.multivariate_normal(np.zeros(len(Q)), Q)
+            X, *_ = f(k, X, Wt[k])
 
-    return X0, P0, Xs, Ws, f, Q, Zs, h, R
+    return X0, P0, Xt, Wt, f, Q, measurements

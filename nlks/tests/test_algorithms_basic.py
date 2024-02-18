@@ -1,5 +1,5 @@
 import numpy as np
-from nlks import examples, run_kalman_smoother, util
+from nlks import examples, run_ekf, run_kalman_smoother, util
 
 
 def test_kalman_smoother():
@@ -14,3 +14,11 @@ def test_kalman_smoother():
     assert np.all(util.rms(efn) < 1.3)
     assert np.all(util.rms(eon) > 0.7)
     assert np.all(util.rms(eon) < 1.3)
+
+
+def test_ekf():
+    X0, P0, Xt, _, f, Q, measurements = examples.generate_nonlinear_pendulum()
+    Xf, Pf = run_ekf(X0, P0, f, Q, measurements)
+    en = (Xf - Xt) / np.diagonal(Pf, axis1=1, axis2=2) ** 0.5
+    assert np.all(util.rms(en) > 0.7)
+    assert np.all(util.rms(en) < 1.3)
