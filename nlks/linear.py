@@ -3,96 +3,136 @@ from scipy import linalg
 from ._common import Bunch
 
 
-def run_linear_kalman_smoother(x0, P0, Fs, Gs, Qs, zs, Hs, Rs, us=None, ws=None):
-    n_epoch = len(zs)
-    if (
-        len(Fs) + 1 != n_epoch
-        or (us is not None and len(us) + 1 != n_epoch)
-        or len(Gs) + 1 != n_epoch
-        or len(Qs) + 1 != n_epoch
-        or (ws is not None and len(ws) + 1 != n_epoch)
-        or len(zs) != n_epoch
-        or len(Hs) != n_epoch
-        or len(Rs) != n_epoch
+def run_kalman_smoother(x0, P0, Fs, Gs, Qs, measurements, us=None, ws=None):
+    """Run linear Kalman smoother.
+
+    The algorithm with explicit co-state recursion is implemented
+    ("Bryson-Frazier smoother"). It is more universal and doesn't rely on covariance
+    matrices from Kalman filter being positive definite. See [1]_ for the discussion
+    of different approaches to the linear smoothing.
+
+    Kalman filter result comes as a byproduct.
+
+    Parameters
+    ----------
+    x0 : array_like, shape (n_states,)
+        Initial state mean.
+    P0 : array_like, shape (n_states, n_states)
+        Initial state covariance.
+    Fs : array_like, shape (n_epochs - 1, n_states, n_states) or (n_states, n_states)
+        Transition matrices.
+    Gs : array_like, shape (n_epochs - 1, n_states, n_noises) or (n_states, n_noises)
+        Process noise input matrices.
+    Qs : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
+        Process noise covariance matrices.
+    measurements : list of n_epochs lists
+        Each list contains tuples (z, H, R) with measurement vector, measurement matrix
+        and noise covariance matrix.
+    us : array_like, shape (n_epochs - 1, n_states) or (n_states,) or None, optional
+        Input control vectors. If None (default) no control vectors are applied.
+    ws : array_like, shape (n_epochs - 1, n_noises) or (n_noises,) or None, optional
+        Noise mean offset vectors, typically are not used in basic Kalman filtering, but
+        may be required by other algorithms, which use the linear Kalman filter.
+        If None (default), assumed to be zero.
+
+    Returns
+    -------
+    Bunch object with the following fields:
+
+        - xf : ndarray, shape (n_epochs, n_states)
+            Filter state estimates.
+        - Pf : ndarray, shape (n_epochs, n_states, n_states)
+            Filter covariance matrices.
+         - xo : ndarray, shape (n_epochs, n_states, n_states)
+            Smoother (optimized) state estimates.
+        - Po : ndarray, shape (n_epoch, n_states, n_states)
+            Smoother covariance matrices.
+        - wo : ndarray, shape (n_epoch, n_noises)
+            Smoother noise vector estimates.
+        - Qo : ndarray, shape (n_epoch, n_noises, n_noises)
+            Smoother noise vector estimates.
+
+    References
+    ----------
+    .. [1] S. R. McReynolds "Fixed interval smoothing - Revisited",
+       Journal of Guidance, Control, and Dynamics 1990, Vol. 23, No. 5
+    """
+    x0 = np.asarray(x0)
+    P0 = np.asarray(P0)
+
+    n_epochs = len(measurements)
+    Fs = np.asarray(Fs)
+    if Fs.ndim == 2:
+        Fs = np.resize(Fs, (n_epochs - 1, *Fs.shape))
+    Gs = np.asarray(Gs)
+    if Gs.ndim == 2:
+        Gs = np.resize(Gs, (n_epochs - 1, *Gs.shape))
+    Qs = np.asarray(Qs)
+    if Qs.ndim == 2:
+        Qs = np.resize(Qs, (n_epochs - 1, *Qs.shape))
+
+    n_states = len(x0)
+    n_noises = Gs.shape[-1]
+
+    if us is None:
+        us = np.zeros((n_epochs - 1, n_states))
+    if ws is None:
+        ws = np.zeros((n_epochs - 1, n_noises))
+
+    if (x0.shape != (n_states,) or
+        P0.shape != (n_states, n_states) or
+        Fs.shape != (n_epochs - 1, n_states, n_states) or
+        Gs.shape != (n_epochs - 1, n_states, n_noises) or
+        Qs.shape != (n_epochs - 1, n_noises, n_noises) or
+        us.shape != (n_epochs - 1, n_states) or
+        ws.shape != (n_epochs - 1, n_noises)
     ):
         raise ValueError("Inconsistent sizes of inputs")
 
-    if us is None:
-        us = [np.zeros(len(F)) for F in Fs]
-    if ws is None:
-        ws = [np.zeros(len(Q)) for Q in Qs]
+    xf = np.empty((n_epochs, n_states))
+    Pf = np.empty((n_epochs, n_states, n_states))
+    xf[0] = x0
+    Pf[0] = P0
+    smoother_data = []
 
-    x = x0
-    P = P0
+    for epoch in range(n_epochs):
+        smoother_data.append([])
+        for z, H, R in measurements[epoch]:
+            xf[epoch], Pf[epoch], U, r, M = kf_update(xf[epoch], Pf[epoch], z, H, R)
+            smoother_data[-1].append((U, r, M))
+        if epoch + 1 < n_epochs:
+            F = Fs[epoch]
+            G = Gs[epoch]
+            xf[epoch + 1] = F @ xf[epoch] + G @ ws[epoch] + us[epoch]
+            Pf[epoch + 1] = F @ Pf[epoch] @ F.T + G @ Qs[epoch] @ G.T
 
-    xf = []
-    Pf = []
-    Us = []
-    rs = []
-    Ms = []
+    lamb = np.zeros(n_states)
+    Lamb = np.zeros((n_states, n_states))
 
-    def update_and_append(x, P, z, H, R):
-        x, P, U, r, M = kf_update(x, P, z, H, R)
-        xf.append(x)
-        Pf.append(P)
-        Us.append(U)
-        rs.append(r)
-        Ms.append(M)
-        return x, P
+    xo = np.empty((n_epochs, n_states))
+    Po = np.empty((n_epochs, n_states, n_states))
+    wo = np.empty((n_epochs - 1, n_noises))
+    Qo = np.empty((n_epochs - 1, n_noises, n_noises))
 
-    for F, u, G, Q, w, z, H, R in zip(Fs, us, Gs, Qs, ws, zs, Hs, Rs):
-        x, P = update_and_append(x, P, z, H, R)
-        x = F @ x + G @ w + u
-        P = F @ P @ F.T + G @ Q @ G.T
+    for epoch in reversed(range(n_epochs)):
+        P = Pf[epoch]
+        xo[epoch] = xf[epoch] + P @ lamb
+        Po[epoch] = P - P @ Lamb @ P
 
-    x, P = update_and_append(x, P, zs[-1], Hs[-1], Rs[-1])
-    lamb = np.zeros(len(x))
-    Lamb = np.zeros((len(x), len(x)))
+        if epoch > 0:
+            Q = Qs[epoch - 1]
+            G = Gs[epoch - 1]
+            wo[epoch - 1] = ws[epoch - 1] + Q @ G.T @ lamb
+            Qo[epoch - 1] = Q - Q @ G.T @ Lamb @ G @ Q
 
-    xo = []
-    Po = []
-    wo = []
-    Qo = []
-    for x, P, F, G, Q, w, H, U, r, M in zip(
-        reversed(xf),
-        reversed(Pf),
-        reversed(Fs),
-        reversed(Gs),
-        reversed(Qs),
-        reversed(ws),
-        reversed(Hs),
-        reversed(Us),
-        reversed(rs),
-        reversed(Ms),
-    ):
-        xo.append(x + P @ lamb)
-        Po.append(P - P @ Lamb @ P)
-        wo.append(w + Q @ G.T @ lamb)
-        Qo.append(Q - Q @ G.T @ Lamb @ G @ Q)
+        for U, r, M in reversed(smoother_data[epoch]):
+            lamb = U.T @ lamb + r
+            Lamb = U.T @ Lamb @ U + M
 
-        lamb = U.T @ lamb + r
-        Lamb = U.T @ Lamb @ U + M
-
-        lamb = F.T @ lamb
-        Lamb = F.T @ Lamb @ F
-
-    xo.append(xf[0] + Pf[0] @ lamb)
-    Po.append(Pf[0] - Pf[0] @ Lamb @ Pf[0])
-
-    wo.reverse()
-    Qo.reverse()
-    xo.reverse()
-    Po.reverse()
-
-    if all(len(x) == len(xf[0]) for x in xf):
-        xf = np.asarray(xf)
-        Pf = np.asarray(Pf)
-        xo = np.asarray(xo)
-        Po = np.asarray(Po)
-
-    if all(len(w) == len(wo[0]) for w in wo):
-        wo = np.asarray(wo)
-        Qo = np.asarray(Qo)
+        if epoch > 0:
+            F = Fs[epoch - 1]
+            lamb = F.T @ lamb
+            Lamb = F.T @ Lamb @ F
 
     return Bunch(xf=xf, Pf=Pf, xo=xo, Po=Po, wo=wo, Qo=Qo)
 

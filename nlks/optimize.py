@@ -1,7 +1,7 @@
 from copy import deepcopy
 import numpy as np
 from scipy import linalg
-from .linear import run_linear_kalman_smoother
+from .linear import run_kalman_smoother
 from .ekf import run_ekf
 from ._common import verify_array, verify_function
 from itertools import chain
@@ -89,8 +89,8 @@ def run_optimization(X0, P0, fs, Qs, Zs, hs, Rs, n_epoch, ftol=1e-8, max_iter=10
     mu = 1.0
     for iteration in range(max_iter):
         x0, Fs, Gs, zs, Hs, us, ws, cost = _build_lp(Xo, Wo)
-        linear_result = run_linear_kalman_smoother(x0, P0, Fs, Gs, Qs, zs, Hs, Rs, us,
-                                                   ws)
+        linear_result = run_kalman_smoother(x0, P0, Fs, Gs, Qs, zs, Hs, Rs, us,
+                                            ws)
         qp_cost_change, qp_grad_dot_step = _eval_quadratic_step(x0, P0, Qs, zs, Hs, Rs,
                                                                 ws, linear_result.xo,
                                                                 linear_result.wo)

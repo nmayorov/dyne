@@ -14,34 +14,43 @@ def generate_linear_pendulum(
     sigma_rate=0.1,
     rng=0,
 ):
+    """Prepare data for an example of linear pendulum with friction.
+
+    The continuous system model is::
+
+        dx1 / dt = x2
+        dx2 / dt = -omega**2 * x1 - 2 * eta * omega * x2 + f
+
+    with ``f`` being an external force. It is discretized with a time step `tau`.
+
+    The measurements consist of both x1 and x2 (angle and angular rate).
+    """
     rng = check_random_state(rng)
     n_states = 2
     n_noises = 1
     n_obs = 2
 
-    xs = np.empty((n_epoch, n_states))
-    xs[0] = rng.multivariate_normal(x0, P0)
-    Fs = np.empty((n_epoch - 1, n_states, n_states))
+    xt = np.empty((n_epoch, n_states))
+    xt[0] = rng.multivariate_normal(x0, P0)
+
     omega = 2 * np.pi / T
-    Fs[:] = [[1, tau], [-(omega**2) * tau, 1 - 2 * eta * omega * tau]]
-    Gs = np.empty((n_epoch - 1, n_states, n_noises))
-    Gs[:] = [[0], [1]]
-    Qs = np.empty((n_epoch - 1, n_noises, n_noises))
-    Qs[:] = tau * qf**2
-    ws = np.empty((n_epoch - 1, n_noises))
+    F = np.array([[1, tau], [-(omega ** 2) * tau, 1 - 2 * eta * omega * tau]])
+    G = np.array([[0], [1]])
+    Q = np.array([[tau * qf**2]])
+    wt = np.empty((n_epoch - 1, n_noises))
 
-    zs = np.empty((n_epoch, n_obs))
-    Hs = np.empty((n_epoch, n_obs, n_states))
-    Hs[:] = np.eye(2)
-    Rs = np.empty((n_epoch, n_obs, n_obs))
-    Rs[:] = np.diag([sigma_angle**2, sigma_rate**2])
+    R = np.diag([sigma_angle**2, sigma_rate**2])
+    H = np.identity(n_obs)
+    measurements = []
 
-    for i in range(n_epoch - 1):
-        zs[i] = Hs[i] @ xs[i] + rng.multivariate_normal([0, 0], Rs[i])
-        ws[i] = rng.multivariate_normal(np.zeros(len(Qs[i])), Qs[i])
-        xs[i + 1] = Fs[i] @ xs[i] + Gs[i] @ ws[i]
+    for i in range(n_epoch):
+        measurements.append(
+            [(H @ xt[i] + rng.multivariate_normal(np.zeros(n_obs), R), H, R)])
+        if i + 1 < n_epoch:
+            wt[i] = rng.multivariate_normal(np.zeros(len(Q)), Q)
+            xt[i + 1] = F @ xt[i] + G @ wt[i]
 
-    return x0, P0, xs, ws, Fs, Gs, Qs, zs, Hs, Rs
+    return x0, P0, xt, wt, F, G, Q, measurements
 
 
 def generate_nonlinear_pendulum(
