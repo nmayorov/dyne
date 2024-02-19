@@ -74,10 +74,8 @@ def run_kalman_smoother(x0, P0, Fs, Gs, Qs, measurements, us=None, ws=None):
     n_states = len(x0)
     n_noises = Gs.shape[-1]
 
-    if us is None:
-        us = np.zeros((n_epochs - 1, n_states))
-    if ws is None:
-        ws = np.zeros((n_epochs - 1, n_noises))
+    us = np.zeros((n_epochs - 1, n_states)) if us is None else np.asarray(us)
+    ws = np.zeros((n_epochs - 1, n_noises)) if ws is None else np.asarray(ws)
 
     if (x0.shape != (n_states,) or
         P0.shape != (n_states, n_states) or
