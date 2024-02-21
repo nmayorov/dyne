@@ -98,15 +98,15 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, max_iter=10):
         x0, F, G, measurements_lin, u, w, cost, cv_l1 = _build_lp(X, W)
         linear_result = run_kalman_smoother(x0, P0, F, G, Q, measurements_lin, u, w)
         qp_cost_change, qp_grad_dot_step = _eval_quadratic_step(
-            x0, P0, Q, measurements_lin, w, linear_result.xo, linear_result.wo)
+            x0, P0, Q, measurements_lin, w, linear_result.x, linear_result.w)
         mu = max(mu, qp_cost_change / (1 - RHO) / cv_l1)
         D = qp_grad_dot_step - mu * cv_l1
         merit = cost + mu * cv_l1
 
         alpha = 1.0
         while alpha > MIN_ALPHA:
-            X_new = X + alpha * linear_result.xo
-            W_new = W + alpha * linear_result.wo
+            X_new = X + alpha * linear_result.x
+            W_new = W + alpha * linear_result.w
             *_, cost_new, cv_l1 = _build_lp(X_new, W_new)
             merit_new = cost_new + mu * cv_l1
             if merit_new < merit + ETA * alpha * D:
@@ -120,4 +120,4 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, max_iter=10):
         if abs(cost - cost_new) < ftol * cost:
             break
 
-    return Bunch(Xf=Xf, Pf=Pf, Xo=X, Po=linear_result.Po, Wo=W, Qo=linear_result.Qo)
+    return Bunch(Xf=Xf, Pf=Pf, Xo=X, Po=linear_result.P, Wo=W, Qo=linear_result.Q)

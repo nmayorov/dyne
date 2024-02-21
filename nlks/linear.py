@@ -39,18 +39,18 @@ def run_kalman_smoother(x0, P0, F, G, Q, measurements, u=None, w=None):
     -------
     Bunch object with the following fields:
 
-        - xf : ndarray, shape (n_epochs, n_states)
+        - x : ndarray, shape (n_epochs, n_states)
+            Smoother state estimates.
+        - P : ndarray, shape (n_epochs, n_states, n_states)
+            Smoother error covariance matrices.
+        - w : ndarray, shape (n_epoch, n_noises)
+            Smoother noise vector estimates.
+        - Q : ndarray, shape (n_epoch, n_noises, n_noises)
+            Smoother noise vector error covariance matrices.
+        - xf : ndarray, shape (n_epochs, n_states, n_states)
             Filter state estimates.
-        - Pf : ndarray, shape (n_epochs, n_states, n_states)
-            Filter covariance matrices.
-         - xo : ndarray, shape (n_epochs, n_states, n_states)
-            Smoother (optimized) state estimates.
-        - Po : ndarray, shape (n_epoch, n_states, n_states)
-            Smoother covariance matrices.
-        - wo : ndarray, shape (n_epoch, n_noises)
-            Smoother noise vector estimates.
-        - Qo : ndarray, shape (n_epoch, n_noises, n_noises)
-            Smoother noise vector estimates.
+        - Pf : ndarray, shape (n_epoch, n_states, n_states)
+            Filter error covariances.
 
     References
     ----------
@@ -107,21 +107,21 @@ def run_kalman_smoother(x0, P0, F, G, Q, measurements, u=None, w=None):
     lamb = np.zeros(n_states)
     Lamb = np.zeros((n_states, n_states))
 
-    xo = np.empty((n_epochs, n_states))
-    Po = np.empty((n_epochs, n_states, n_states))
-    wo = np.empty((n_epochs - 1, n_noises))
-    Qo = np.empty((n_epochs - 1, n_noises, n_noises))
+    xs = np.empty((n_epochs, n_states))
+    Ps = np.empty((n_epochs, n_states, n_states))
+    ws = np.empty((n_epochs - 1, n_noises))
+    Qs = np.empty((n_epochs - 1, n_noises, n_noises))
 
     for epoch in reversed(range(n_epochs)):
         P = Pf[epoch]
-        xo[epoch] = xf[epoch] + P @ lamb
-        Po[epoch] = P - P @ Lamb @ P
+        xs[epoch] = xf[epoch] + P @ lamb
+        Ps[epoch] = P - P @ Lamb @ P
 
         if epoch > 0:
             Gk = G[epoch - 1]
             Qk = Q[epoch - 1]
-            wo[epoch - 1] = w[epoch - 1] + Qk @ Gk.T @ lamb
-            Qo[epoch - 1] = Qk - Qk @ Gk.T @ Lamb @ Gk @ Qk
+            ws[epoch - 1] = w[epoch - 1] + Qk @ Gk.T @ lamb
+            Qs[epoch - 1] = Qk - Qk @ Gk.T @ Lamb @ Gk @ Qk
 
         for U, r, M in reversed(smoother_data[epoch]):
             lamb = U.T @ lamb + r
@@ -132,7 +132,7 @@ def run_kalman_smoother(x0, P0, F, G, Q, measurements, u=None, w=None):
             lamb = Fk.T @ lamb
             Lamb = Fk.T @ Lamb @ Fk
 
-    return Bunch(xf=xf, Pf=Pf, xo=xo, Po=Po, wo=wo, Qo=Qo)
+    return Bunch(x=xs, P=Ps, w=ws, Q=Qs, xf=xf, Pf=Pf)
 
 
 def kf_update(x, P, z, H, R):
