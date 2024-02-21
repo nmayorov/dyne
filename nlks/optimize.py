@@ -64,7 +64,7 @@ def _eval_cv_norm(us):
     return sum(np.linalg.norm(u, ord=1) for u in us)
 
 
-def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, max_iter=10):
+def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, ctol=1e-8, max_iter=10):
     RHO = 0.5
     MIN_ALPHA = 0.01
     TAU = 0.9
@@ -107,7 +107,7 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, max_iter=10):
         while alpha > MIN_ALPHA:
             X_new = X + alpha * linear_result.x
             W_new = W + alpha * linear_result.w
-            *_, cost_new, cv_l1 = _build_lp(X_new, W_new)
+            *_, u, _, cost_new, cv_l1 = _build_lp(X_new, W_new)
             merit_new = cost_new + mu * cv_l1
             if merit_new < merit + ETA * alpha * D:
                 break
@@ -117,7 +117,9 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, max_iter=10):
         X = X_new
         W = W_new
 
-        if abs(cost - cost_new) < ftol * cost:
+        cost_check = abs(cost - cost_new) < ftol * cost
+        cv_check = np.all(np.abs(u) < ctol * np.maximum(np.abs(X[1:]), 1.0))
+        if cost_check and cv_check:
             break
 
     return Bunch(Xf=Xf, Pf=Pf, Xo=X, Po=linear_result.P, Wo=W, Qo=linear_result.Q)
