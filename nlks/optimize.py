@@ -60,11 +60,69 @@ def _eval_cost(x0, P0, w, Q, measurements):
     return result
 
 
-def _eval_cv_norm(us):
-    return sum(np.linalg.norm(u, ord=1) for u in us)
-
-
 def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, ctol=1e-8, max_iter=10):
+    """Run batch optimization algorithm.
+
+    The iterations are terminated if both conditions controlled by `ftol` and `ctol`
+    are satisfied. Or the number of iterations exceeds `max_iter`.
+
+    Parameters
+    ----------
+    X0 : array_like, shape (n_states,)
+        Initial state estimate.
+    P0 : array_like, shape (n_states, n_states)
+        Initial error covariance.
+    f : callable
+        Transition function with a signature ``f(k, X, W=None) -> X_next, F, G``, where:
+
+            - k - epoch index to transition from, i.e. from k to k + 1
+            - X - state vector
+            - W - optional noise vector. If None, then it must be treated as zeros with
+              an appropriate size
+            - X_next - predicted next state vector
+            - F - Jacobian of the transition function w.r.t. to ``X``
+            - G - Jacobian of the transition function w.r.t. to the noise vector ``W``.
+
+    Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
+        Process noise covariance matrix. Either constant or specified for each
+        transition.
+    measurements : list of n_epoch lists
+        Each list contains triples (Z, h, R) with measurement vector, measurement
+        function and measurement noise covariance. The measurement functions must
+        have a signature ``h(k, X) -> Z_pred, H``, where:
+
+            - k - epoch index
+            - X - state vector
+            - Z_pred - predicted measurement vector
+            - H - measurement function Jacobian w.r.t. ``X``
+    ftol : float, optional
+        Required tolerance for termination by the change of the cost function.
+        The iterations can be terminated if the relative cost change on the last
+        iteration is less than `ftol`. Default is 1e-8.
+    ctol : float, optional
+        Required tolerance of constraints satisfaction. The iterations can be terminated
+        if the relative residual between predicted and actual `X` is less that
+        `ctol`. Default is 1e-8.
+    max_iter : int, optional
+        Maximum allowed number of iterations. Default is 10.
+
+    Returns
+    -------
+    Bunch objects with the following fields:
+
+        - X : ndarray, shape (n_epochs, n_states)
+            Optimized state estimates.
+        - P : ndarray, shape (n_epochs, n_states, n_states)
+            Error covariance matrices.
+        - W : ndarray, shape (n_epochs, n_noises)
+            Optimized noise vector estimates.
+        - Q : ndarray, shape (n_epochs, n_noises, n_noises)
+            Noise vector error covariance matrices.
+        - Xf : ndarray, shape (n_epochs, n_states)
+            State estimates computed by EKF.
+        - Pf : ndarray, shape (n_epochs, n_states, n_states)
+            Error covariance matrices for EKF estimates.
+    """
     RHO = 0.5
     MIN_ALPHA = 0.01
     TAU = 0.9
@@ -122,4 +180,4 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, ctol=1e-8, max_iter=
         if cost_check and cv_check:
             break
 
-    return Bunch(Xf=Xf, Pf=Pf, Xo=X, Po=linear_result.P, Wo=W, Qo=linear_result.Q)
+    return Bunch(X=X, P=linear_result.P, W=W, Q=linear_result.Q, Xf=Xf, Pf=Pf)

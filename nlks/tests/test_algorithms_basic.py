@@ -29,9 +29,9 @@ def test_optimization():
     result = run_optimization(X0, P0, f, Q, measurements)
 
     efn = (result.Xf - Xt) / np.diagonal(result.Pf, axis1=1, axis2=2) ** 0.5
-    eon = (result.Xo - Xt) / np.diagonal(result.Po, axis1=1, axis2=2) ** 0.5
+    eon = (result.X - Xt) / np.diagonal(result.P, axis1=1, axis2=2) ** 0.5
 
-    assert np.all(util.rms(result.Xo - Xt) < util.rms(result.Xf - Xt))
+    assert np.all(util.rms(result.X - Xt) < util.rms(result.Xf - Xt))
     assert np.all(util.rms(efn) > 0.7)
     assert np.all(util.rms(efn) < 1.3)
     assert np.all(util.rms(eon) > 0.7)
