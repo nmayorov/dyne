@@ -3,7 +3,7 @@ import numpy as np
 from scipy import linalg
 from .linear import run_kalman_smoother
 from .ekf import run_ekf
-from ._common import Bunch
+from .util import Bunch
 
 
 def _build_linear_problem(X0, X, W, f, measurements):

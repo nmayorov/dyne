@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import linalg
-from ._common import Bunch
+from .util import Bunch
 
 
 def run_kalman_smoother(x0, P0, F, G, Q, measurements, u=None, w=None):
