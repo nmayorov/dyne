@@ -1,5 +1,5 @@
 import numpy as np
-from nlks import examples, run_ekf, run_kalman_smoother, run_optimization, util
+from dyne import examples, run_ekf, run_kalman_smoother, run_optimization, util
 
 
 def test_kalman_smoother():
