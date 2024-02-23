@@ -84,7 +84,7 @@ def generate_nonlinear_pendulum(
     omega = 2 * np.pi / T
     Q = np.diag([sigma_omega**2, sigma_eta**2, sigma_f**2])
 
-    def f(k, X, W=None):
+    def f(k, X, W=None, with_jacobian=True):
         if W is None:
             W = np.zeros(3)
 
@@ -96,6 +96,8 @@ def generate_nonlinear_pendulum(
                           - 2 * eta_ * omega_ * X[1] * (1 + xi * X[1] ** 2)
                           + W[2])
         ])
+        if not with_jacobian:
+            return X_next
         F = np.array([
             [1, tau],
             [-tau * omega_ ** 2 * np.cos(X[0]),
@@ -108,8 +110,11 @@ def generate_nonlinear_pendulum(
         ])
         return X_next, F, G
 
-    def h(k, X):
-        return np.array([np.sin(X[0])]), np.array([[np.cos(X[0]), 0]])
+    def h(k, X, with_jacobian=True):
+        Z = np.array([np.sin(X[0])])
+        if not with_jacobian:
+            return Z
+        return Z, np.array([[np.cos(X[0]), 0]])
 
     R = np.array([[sigma_measurement_x ** 2]])
     X = rng.multivariate_normal(X0, P0)
