@@ -146,9 +146,9 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, ctol=1e-8, max_iter=
             Q.shape != (n_epochs - 1, n_noises, n_noises)):
         raise ValueError("Inconsistent input shapes")
 
-    Xf, Pf = run_ekf(X0, P0, f, Q, measurements)
+    ekf_result = run_ekf(X0, P0, f, Q, measurements)
 
-    X = deepcopy(Xf)
+    X = deepcopy(ekf_result.X)
     W = np.zeros((n_epochs - 1, n_noises))
 
     mu = 1.0
@@ -180,4 +180,5 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, ctol=1e-8, max_iter=
         if cost_check and cv_check:
             break
 
-    return Bunch(X=X, P=linear_result.P, W=W, Q=linear_result.Q, Xf=Xf, Pf=Pf)
+    return Bunch(X=X, P=linear_result.P, W=W, Q=linear_result.Q, Xf=ekf_result.X,
+                 Pf=ekf_result.P)

@@ -37,10 +37,12 @@ def run_ekf(X0, P0, f, Q, measurements):
 
     Returns
     -------
-    x : ndarray, shape (n_epochs, n_states)
-        State estimates.
-    P : ndarray, shape (n_epochs, n_states, n_states)
-        Error covariance estimates.
+    Bunch with the following fields:
+
+        X : ndarray, shape (n_epochs, n_states)
+            State estimates.
+        P : ndarray, shape (n_epochs, n_states, n_states)
+            Error covariance estimates.
     """
     n_states = len(X0)
     n_epochs = len(measurements)
