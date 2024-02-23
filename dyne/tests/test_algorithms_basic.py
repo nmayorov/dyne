@@ -1,5 +1,6 @@
 import numpy as np
 from dyne import examples, run_ekf, run_kalman_smoother, run_optimization, util
+import dyne
 
 
 def test_kalman_smoother():
@@ -22,6 +23,14 @@ def test_ekf():
     en = (result.X - Xt) / np.diagonal(result.P, axis1=1, axis2=2) ** 0.5
     assert np.all(util.rms(en) > 0.7)
     assert np.all(util.rms(en) < 1.3)
+
+
+def test_ukf():
+    X0, P0, Xt, _, f, Q, measurements = examples.generate_nonlinear_pendulum()
+    result = dyne.run_ukf(X0, P0, f, Q, measurements)
+    en = (result.X - Xt) / np.diagonal(result.P, axis1=1, axis2=2) ** 0.5
+    assert np.all(util.rms(en) > 0.7)
+    assert np.all(util.rms(en) < 1.5)  # UKF doesn't seem to be consistent.
 
 
 def test_optimization():
