@@ -1,6 +1,7 @@
 """Extended Kalman Filter."""
 import numpy as np
 from .linear import kf_update
+from .util import Bunch
 
 
 def run_ekf(X0, P0, f, Q, measurements):
@@ -69,4 +70,4 @@ def run_ekf(X0, P0, f, Q, measurements):
             X[k + 1], F, G = f(k, X[k])
             P[k + 1] = F @ P[k] @ F.T + G @ Q[k] @ G.T
 
-    return X, P
+    return Bunch(X=X, P=P)
