@@ -27,7 +27,9 @@ def run_ukf(X0, P0, f, Q, measurements):
             P_root = np.sqrt(n_states) * linalg.cholesky(P[k])
             Z_probe = []
             X_probe = []
-            for sigma in P_root.T:
+            # Default scipy cholesky gives U such that P = U^T U,
+            # we need to add columns of U^T or rows of U
+            for sigma in P_root:
                 for sign in [-1, 1]:
                     X_probe.append(X[k] + sign * sigma)
                     Z_probe.append(h(k, X_probe[-1], with_jacobian=False))
@@ -49,7 +51,7 @@ def run_ukf(X0, P0, f, Q, measurements):
             Pa_root = np.sqrt(n_states + n_noises) * linalg.block_diag(
                 linalg.cholesky(P[k]), linalg.cholesky(Q[k]))
             X_probe = []
-            for sigma in Pa_root.T:
+            for sigma in Pa_root:
                 for sign in [-1, 1]:
                     X_probe.append(f(k, X[k] + sign * sigma[:n_states],
                                      sign * sigma[n_states:], with_jacobian=False))
