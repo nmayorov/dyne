@@ -73,28 +73,14 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, ctol=1e-8, max_iter=
     P0 : array_like, shape (n_states, n_states)
         Initial error covariance.
     f : callable
-        Transition function with a signature ``f(k, X, W=None) -> X_next, F, G``, where:
-
-            - k - epoch index to transition from, i.e. from k to k + 1
-            - X - state vector
-            - W - optional noise vector. If None, then it must be treated as zeros with
-              an appropriate size
-            - X_next - predicted next state vector
-            - F - Jacobian of the transition function w.r.t. to ``X``
-            - G - Jacobian of the transition function w.r.t. to the noise vector ``W``.
-
+        Process function, must follow `util.process_callable` interface.
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrix. Either constant or specified for each
         transition.
     measurements : list of n_epoch lists
         Each list contains triples (Z, h, R) with measurement vector, measurement
-        function and measurement noise covariance. The measurement functions must
-        have a signature ``h(k, X) -> Z_pred, H``, where:
-
-            - k - epoch index
-            - X - state vector
-            - Z_pred - predicted measurement vector
-            - H - measurement function Jacobian w.r.t. ``X``
+        function and measurement noise covariance. The measurement function must
+        follow `util.measurement_callable` interface.
     ftol : float, optional
         Required tolerance for termination by the change of the cost function.
         The iterations can be terminated if the relative cost change on the last

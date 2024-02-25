@@ -27,7 +27,7 @@ def run_ukf(X0, P0, f, Q, measurements, alpha=1.0):
     P0 : array_like, shape (n_states, n_states)
         Initial error covariance.
     f : callable
-        Transition function callable.
+        Process function, must follow `util.process_callable` interface.
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrix. Either constant or specified for each
         transition.
