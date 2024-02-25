@@ -6,28 +6,6 @@ from .ekf import run_ekf
 from .util import Bunch
 
 
-def _build_linear_problem(X0, X, W, f, measurements):
-    n_epochs = len(measurements)
-    n_states = len(X0)
-    n_noises = W.shape[-1]
-    F = np.empty((n_epochs - 1, n_states, n_states))
-    G = np.empty((n_epochs - 1, n_states, n_noises))
-    u = np.empty((n_epochs - 1, n_states))
-    measurements_lin = []
-
-    for k in range(n_epochs):
-        measurements_lin.append([])
-        for Z, h, R in measurements[k]:
-            Z_pred, H = h(k, X[k])
-            measurements_lin[-1].append((Z - Z_pred, H, R))
-
-        if k + 1 < n_epochs:
-            X_pred, F[k], G[k] = f(k, X[k], W[k])
-            u[k] = X_pred - X[k + 1]
-
-    return X0 - X[0], F, G, measurements_lin, u, -W
-
-
 def _eval_quadratic_step(x0, P0, Q, measurements_lin, wp, x, w):
     def _eval_quadratic_item(x, z, R, H=None):
         Hx = x if H is None else H @ x
@@ -114,12 +92,6 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, ctol=1e-8, max_iter=
     TAU = 0.9
     ETA = 0.1
 
-    def _build_lp(X, W):
-        x0, F, G, measurements_lin, u, w = _build_linear_problem(X0, X, W, f,
-                                                                 measurements)
-        return (x0, F, G, measurements_lin, u, w,
-                _eval_cost(x0, P0, w, Q, measurements_lin), np.sum(np.abs(u)))
-
     n_states = len(X0)
     n_epochs = len(measurements)
 
@@ -137,9 +109,30 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, ctol=1e-8, max_iter=
     X = deepcopy(ekf_result.X)
     W = np.zeros((n_epochs - 1, n_noises))
 
+    def _build_linear_problem(X, W):
+        F = np.empty((n_epochs - 1, n_states, n_states))
+        G = np.empty((n_epochs - 1, n_states, n_noises))
+        u = np.empty((n_epochs - 1, n_states))
+        measurements_lin = []
+
+        for k in range(n_epochs):
+            measurements_lin.append([])
+            for Z, h, R in measurements[k]:
+                Z_pred, H = h(k, X[k])
+                measurements_lin[-1].append((Z - Z_pred, H, R))
+
+            if k + 1 < n_epochs:
+                X_pred, F[k], G[k] = f(k, X[k], W[k])
+                u[k] = X_pred - X[k + 1]
+
+        x0 = X0 - X[0]
+        w = -W
+        return (x0, F, G, measurements_lin, u, w,
+                _eval_cost(x0, P0, w, Q, measurements_lin), np.sum(np.abs(u)))
+
     mu = 1.0
     for iteration in range(max_iter):
-        x0, F, G, measurements_lin, u, w, cost, cv_l1 = _build_lp(X, W)
+        x0, F, G, measurements_lin, u, w, cost, cv_l1 = _build_linear_problem(X, W)
         linear_result = run_kalman_smoother(x0, P0, F, G, Q, measurements_lin, u, w)
         qp_cost_change, qp_grad_dot_step = _eval_quadratic_step(
             x0, P0, Q, measurements_lin, w, linear_result.x, linear_result.w)
@@ -151,7 +144,7 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, ctol=1e-8, max_iter=
         while alpha > MIN_ALPHA:
             X_new = X + alpha * linear_result.x
             W_new = W + alpha * linear_result.w
-            *_, u, _, cost_new, cv_l1 = _build_lp(X_new, W_new)
+            *_, u, _, cost_new, cv_l1 = _build_linear_problem(X_new, W_new)
             merit_new = cost_new + mu * cv_l1
             if merit_new < merit + ETA * alpha * D:
                 break
