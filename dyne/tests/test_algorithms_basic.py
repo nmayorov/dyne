@@ -45,3 +45,13 @@ def test_optimization():
     assert np.all(dyne.util.rms(efn) < 1.3)
     assert np.all(dyne.util.rms(eon) > 0.7)
     assert np.all(dyne.util.rms(eon) < 1.3)
+
+
+def test_mhf():
+    X0, P0, Xt, _, f, Q, measurements = dyne.examples.generate_nonlinear_pendulum()
+
+    for window in [1, 3, 5]:
+        result = dyne.run_mhf(X0, P0, f, Q, measurements, window)
+        en = (result.X - Xt) / np.diagonal(result.P, axis1=1, axis2=2) ** 0.5
+        assert np.all(dyne.util.rms(en) > 0.7)
+        assert np.all(dyne.util.rms(en) < 1.3)
