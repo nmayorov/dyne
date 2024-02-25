@@ -29,6 +29,7 @@ At the moment the following algorithms are implemented in `dyne`:
 - Linear Kalman filter and smoother
 - Extended Kalman Filter
 - Unscented Kalman Filter
+- Moving Horizon Filter (windowed nonlinear optimization, backward-smoothing EKF)
 - Full nonlinear batch optimization (optimal nonlinear smoother)
 
 ## Installation
