@@ -1,3 +1,5 @@
+![tests status](https://github.com/nmayorov/dyne/actions/workflows/build_and_test.yaml/badge.svg)
+
 # dyne
 
 dyne is a Python package containing a collection of algorithms for state estimation in dynamic 
