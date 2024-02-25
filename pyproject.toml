@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dyne"
+description = "Optimal estimation of dynamic systems"
+version = "0.1"
+maintainers = [
+    {name = "Nikolay Mayorov", email = "nikolay.mayorov@zoho.com"},
+]
+keywords = ["Estimation", "Dynamic systems", "Kalman filters",
+            "Filtering and smoothing", "Optimization"]
+license = {file="LICENSE.txt"}
+readme = "README.md"
+dependencies = ["numpy", "scipy"]
+classifiers=[
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Homepage = "https://github.com/nmayorov/dyne"

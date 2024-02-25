@@ -28,3 +28,20 @@ At the moment the following algorithms are implemented in `dyne`:
 - Extended Kalman Filter
 - Unscented Kalman Filter
 - Full nonlinear batch optimization (optimal nonlinear smoother)
+
+## Installation
+
+The package is pure Python and can be easily installed on any platform.
+Runtime dependencies include (versions in parentheses were used for the latest development):
+
+* numpy (1.25.2)
+* scipy (1.11.3)
+
+To perform a regular install, execute in the cloned repository directory: 
+```shell
+pip install .
+```
+To perform an editable (inplace) install:
+```shell
+pip install -e .
+```
