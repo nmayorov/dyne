@@ -1,3 +1,4 @@
+"""Linear Kalman filter and smoother."""
 import numpy as np
 from scipy import linalg
 from .util import Bunch

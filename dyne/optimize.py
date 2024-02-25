@@ -1,3 +1,4 @@
+"""Nonlinear batch optimization."""
 from copy import deepcopy
 import numpy as np
 from scipy import linalg

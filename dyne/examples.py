@@ -1,3 +1,4 @@
+"""Example of estimation problems."""
 import numpy as np
 from scipy._lib._util import check_random_state
 
