@@ -5,6 +5,49 @@ from .util import Bunch
 
 
 def run_ukf(X0, P0, f, Q, measurements, alpha=1.0):
+    """Run Unscented Kalman Filter.
+
+    Refer to [1]_, sec. 5.6.
+
+    The "unscented transform" is implemented with 2 * n points computed as
+    ``m +- alpha * n**0.5 * s``, where
+
+        - ``m`` - current mean estimate
+        - ``alpha`` - scaling parameter assumed to be (0, 1]
+        - ``n`` - number of states
+        - ``s`` - column of the root-covariance matrix
+
+    With ``alpha = 1`` the filter is also known as cubature Kalman filter [1]_,
+    sec. 6.6.
+
+    Parameters
+    ----------
+    X0 : array_like, shape (n_states,)
+        Initial state estimate.
+    P0 : array_like, shape (n_states, n_states)
+        Initial error covariance.
+    f : callable
+        Transition function callable.
+    Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
+        Process noise covariance matrix. Either constant or specified for each
+        transition.
+    measurements : list of n_epoch lists
+        Each list contains triples (Z, h, R) with measurement vector, measurement
+        function and measurement noise covariance.
+
+    Returns
+    -------
+    Bunch with the following fields:
+
+        X : ndarray, shape (n_epochs, n_states)
+            State estimates.
+        P : ndarray, shape (n_epochs, n_states, n_states)
+            Error covariance estimates.
+
+    References
+    ----------
+    .. [1] S. Särkkä "Baysian Filtering and Smoothing"
+    """
     n_states = len(X0)
     n_epochs = len(measurements)
     Q = np.asarray(Q)
