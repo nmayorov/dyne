@@ -1,5 +1,4 @@
-"""Nonlinear batch optimization."""
-from copy import deepcopy
+"""Estimation algorithms based on optimization."""
 import numpy as np
 from scipy import linalg
 from .linear import run_kalman_smoother
