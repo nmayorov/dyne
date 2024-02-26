@@ -9,6 +9,8 @@ from .util import Bunch
 
 def _eval_quadratic_step(x0, P0, Q, measurements_lin, wp, x, w):
     def _eval_quadratic_item(x, z, R, H=None):
+        if R.size == 0:
+            return 0.0, 0.0
         Hx = x if H is None else H @ x
         RiHx = linalg.cho_solve(linalg.cho_factor(R), Hx)
         return 0.5 * np.dot(Hx, RiHx) - np.dot(z, RiHx), -np.dot(z, RiHx)
@@ -28,7 +30,8 @@ def _eval_quadratic_step(x0, P0, Q, measurements_lin, wp, x, w):
 
 def _eval_cost(x0, P0, w, Q, measurements):
     def _eval_quadratic(x, P):
-        return 0.5 * np.dot(x, linalg.cho_solve(linalg.cho_factor(P), x))
+        return (0 if P.size == 0
+                else 0.5 * np.dot(x, linalg.cho_solve(linalg.cho_factor(P), x)))
 
     result = _eval_quadratic(x0, P0)
     for wk, Qk in zip(w, Q):
