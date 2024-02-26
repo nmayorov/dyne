@@ -263,3 +263,95 @@ def generate_falling_body(total_time=60, time_step=1,
     n_epochs = len(Z)
     return (X0, P0, Xt, np.empty((n_epochs - 1, 0)), f, np.empty((n_epochs - 1, 0, 0)),
             n_epochs, [(np.arange(n_epochs), Z, h, R)])
+
+
+def generate_lorenz_system(
+    n_epochs=1000,
+    X0=np.array([10, -5, 5]),
+    P0=np.diag([5, 5, 5])**2,
+    tau=0.05,
+    sigma=10.0,
+    beta=8.0/3.0,
+    rho=28.0,
+    sigma_measurement_x=1.0,
+    rng=0
+):
+    """Prepare data for an example of Lorenz system.
+
+    The continuous time system model is::
+
+        dx / dt = sigma * (y - x)
+        dy / dt = x * (rho - z) - y
+        dz / dt = x * y - beta * z
+
+    The system was studied by Edward Lorenz and relate the thermal properties
+    of a two-dimensional fluid layer. With default parameters sigma=10,
+    beta=3/8, rho=28 the sytem exhibits chaotic behavior.
+    It is discretized with a time step `tau`.
+    """
+    rng = check_random_state(rng)
+
+    def lorenz(state, sigma, beta, rho):
+        state = np.atleast_2d(state)
+        x, y, z = state.T
+        f = np.empty_like(state)
+
+        f[:, 0] = sigma * (y - x)
+        f[:, 1] = x * (rho - z) - y
+        f[:, 2] = x*y - beta*z
+
+        return f[0] if len(f) == 1 else f
+
+    def lorenz_jacobian(state, sigma=10, beta=8/3, rho=28):
+        state = np.atleast_2d(state)
+        x, y, z = state.T
+        F = np.empty((len(state), 3, 3))
+
+        F[:, 0, 0] = -sigma
+        F[:, 0, 1] =  sigma
+        F[:, 0, 2] =  0
+        F[:, 1, 0] =  rho - z
+        F[:, 1, 1] = -1
+        F[:, 1, 2] = -x
+        F[:, 2, 0] =  y
+        F[:, 2, 1] =  x
+        F[:, 2, 2] = -beta
+
+        return F[0] if len(F) == 1 else F
+
+    def f(k, X, W=None, with_jacobian=True, max_step=tau):
+        sol = solve_ivp(lambda t, x: lorenz(x, sigma, beta, rho),
+                        (0, tau), X, max_step=max_step)
+        X_next = sol.y.T[-1]
+
+        if not with_jacobian:
+            return X_next
+        F0 = lorenz_jacobian(X)
+        F1 = lorenz_jacobian(X_next)
+        Phi = np.eye(3) + 0.5 * (F0 + F1) * tau
+        return X_next, Phi, np.zeros((3,3))
+
+    def h(k, X, with_jacobian=True):
+        Z = np.array([X[0]])
+        if not with_jacobian:
+            return Z
+        return Z, np.array([[1, 0, 0]])
+
+    R = np.array([[sigma_measurement_x ** 2]])
+    X = rng.multivariate_normal(X0, P0)
+    Xt = np.empty((n_epochs, 3))
+    Wt = None
+    Q = None
+    measurements = []
+
+    for k in range(n_epochs):
+        Xt[k] = X
+        Z = ( h(k, X, with_jacobian=False)
+             + rng.multivariate_normal(np.zeros(len(R)), R))
+        measurements.append([(Z, h, R)])
+
+        if k + 1 < n_epochs:
+            X = f(k, X, W=None, with_jacobian=None, max_step=1e-3)
+
+    return X0, P0, Xt, Wt, f, Q, measurements
+
