@@ -10,11 +10,16 @@ def test_kalman_smoother():
     efn = (result.xf - xt) / np.diagonal(result.Pf, axis1=1, axis2=2) ** 0.5
     eon = (result.x - xt) / np.diagonal(result.P, axis1=1, axis2=2) ** 0.5
 
-    assert np.all(dyne.util.compute_rms(result.x - xt) < dyne.util.compute_rms(result.xf - xt))
+    assert np.all(dyne.util.compute_rms(result.x - xt) <
+                  dyne.util.compute_rms(result.xf - xt))
     assert np.all(dyne.util.compute_rms(efn) > 0.7)
     assert np.all(dyne.util.compute_rms(efn) < 1.3)
     assert np.all(dyne.util.compute_rms(eon) > 0.7)
     assert np.all(dyne.util.compute_rms(eon) < 1.3)
+
+    for k in range(n_epochs - 1):
+        error = F @ result.x[k] + G @ result.w[k] - result.x[k + 1]
+        assert np.all(np.abs(error) < 1e-15)
 
 
 def test_ekf():

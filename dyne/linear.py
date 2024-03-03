@@ -41,17 +41,16 @@ def _run_smoother(x0, P0, F, G, Q, measurements, u, w):
         xs[epoch] = xf[epoch] + P @ lamb
         Ps[epoch] = P - P @ Lamb @ P
 
+        for U, r, M in reversed(smoother_data[epoch]):
+            lamb = U.T @ lamb + r
+            Lamb = U.T @ Lamb @ U + M
+
         if epoch > 0:
             Gk = G[epoch - 1]
             Qk = Q[epoch - 1]
             ws[epoch - 1] = w[epoch - 1] + Qk @ Gk.T @ lamb
             Qs[epoch - 1] = Qk - Qk @ Gk.T @ Lamb @ Gk @ Qk
 
-        for U, r, M in reversed(smoother_data[epoch]):
-            lamb = U.T @ lamb + r
-            Lamb = U.T @ Lamb @ U + M
-
-        if epoch > 0:
             Fk = F[epoch - 1]
             lamb = Fk.T @ lamb
             Lamb = Fk.T @ Lamb @ Fk
