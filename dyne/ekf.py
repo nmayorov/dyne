@@ -1,6 +1,6 @@
 """Extended Kalman Filter."""
 import numpy as np
-from .linear import kf_update
+from .linear import _kalman_update
 from .util import Bunch
 from ._common import check_measurements
 
@@ -70,8 +70,8 @@ def run_ekf(X0, P0, f, Q, n_epochs, measurements=None):
             index = np.searchsorted(epochs, k)
             if index < len(epochs) and epochs[index] == k:
                 Z_pred, H = h(k, X[k])
-                x, P[k], *_ = kf_update(np.zeros(n_states), P[k], Z_pred - Z[index], H,
-                                        R[index])
+                x, P[k], *_ = _kalman_update(np.zeros(n_states), P[k],
+                                             Z_pred - Z[index], H, R[index])
                 X[k] -= x
 
         if k + 1 < n_epochs:

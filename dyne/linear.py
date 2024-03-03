@@ -18,7 +18,8 @@ def _run_smoother(x0, P0, F, G, Q, measurements, u, w):
     for epoch in range(n_epochs):
         smoother_data.append([])
         for z, H, R in measurements[epoch]:
-            xf[epoch], Pf[epoch], U, r, M = kf_update(xf[epoch], Pf[epoch], z, H, R)
+            xf[epoch], Pf[epoch], U, r, M = _kalman_update(
+                xf[epoch], Pf[epoch], z, H, R)
             smoother_data[-1].append((U, r, M))
 
         if epoch + 1 < n_epochs:
@@ -186,7 +187,7 @@ def run_kalman_smoother(x0, P0, F, G, Q, n_epochs, measurements=None, u=None, w=
     return _run_smoother(x0, P0, F, G, Q, meas_each_epoch, u, w)
 
 
-def kf_update(x, P, z, H, R):
+def _kalman_update(x, P, z, H, R):
     S = H @ P @ H.T + R
     J = linalg.cho_solve(linalg.cho_factor(S), H).T
     K = P @ J
