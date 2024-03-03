@@ -18,8 +18,9 @@ def test_kalman_smoother():
 
 
 def test_ekf():
-    X0, P0, Xt, _, f, Q, measurements = dyne.examples.generate_nonlinear_pendulum()
-    result = dyne.run_ekf(X0, P0, f, Q, measurements)
+    X0, P0, Xt, _, f, Q, n_epochs, measurements = (
+        dyne.examples.generate_nonlinear_pendulum())
+    result = dyne.run_ekf(X0, P0, f, Q, n_epochs, measurements)
     en = (result.X - Xt) / np.diagonal(result.P, axis1=1, axis2=2) ** 0.5
     assert np.all(dyne.util.rms(en) > 0.7)
     assert np.all(dyne.util.rms(en) < 1.3)

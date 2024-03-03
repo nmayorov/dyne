@@ -120,15 +120,15 @@ def generate_nonlinear_pendulum(
     X = rng.multivariate_normal(X0, P0)
     Xt = np.empty((n_epochs, 2))
     Wt = np.empty((n_epochs - 1, 3))
-    measurements = []
+    Z = []
 
     for k in range(n_epochs):
         Xt[k] = X
-        Z = h(k, X)[0] + rng.multivariate_normal(np.zeros(len(R)), R)
-        measurements.append([(Z, h, R)])
+        Z.append(h(k, X, with_jacobian=False)
+                 + rng.multivariate_normal(np.zeros(len(R)), R))
 
         if k + 1 < n_epochs:
             Wt[k] = rng.multivariate_normal(np.zeros(len(Q)), Q)
             X, *_ = f(k, X, Wt[k])
 
-    return X0, P0, Xt, Wt, f, Q, measurements
+    return X0, P0, Xt, Wt, f, Q, n_epochs, [(np.arange(n_epochs), Z, h, R)]
