@@ -25,6 +25,7 @@ class Bunch(dict):
 
 
 def rms(data):
+    """Compute root-mean-square of data along 0 axis."""
     return np.mean(np.square(data), axis=0) ** 0.5
 
 
@@ -38,7 +39,7 @@ def process_callable(k, X, W=None, with_jacobian=True):
     Parameters
     ----------
     k : int
-        Epoch index at which the function is evaluated, that is the function might
+        Epoch index at which the function is evaluated. That is the function might
         explicitly depend on the epoch index.
     X : ndarray, shape (n_states,)
         State vector.
@@ -68,7 +69,7 @@ def measurement_callable(k, X, with_jacobian=True):
 
     This function stub is included to conveniently describe the expected interface
     of measurement callables (denoted as ``h``) used in the estimation algorithms
-    provided  in the package.
+    provided in the package.
 
     Parameters
     ----------

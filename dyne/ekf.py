@@ -15,7 +15,7 @@ def run_ekf(X0, P0, f, Q, n_epochs, measurements=None):
     P0 : array_like, shape (n_states, n_states)
         Initial error covariance.
     f : callable
-        Process function, must follow `util.process_callable` interface.
+        Process function, must follow `dyne.util.process_callable` interface.
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrix. Either constant or specified for each
         transition.
@@ -30,8 +30,8 @@ def run_ekf(X0, P0, f, Q, n_epochs, measurements=None):
             - Z : array_like, shape (n, m)
                 Measurement vectors.
             - h : callable
-                The measurement function which must follow `util.measurement_callable`
-                interface.
+                The measurement function which must follow
+                `dyne.util.measurement_callable` interface.
             - R : array_like, shape (n, m, m) or (m, m)
                 Measurement noise covariance matrix specified for each epoch or a
                 single matrix, constant for each epoch.

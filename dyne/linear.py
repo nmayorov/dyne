@@ -66,7 +66,7 @@ def run_kalman_smoother(x0, P0, F, G, Q, n_epochs, measurements=None, u=None, w=
     matrices from Kalman filter being positive definite. See [1]_ for the discussion
     of different approaches to the linear smoothing.
 
-    Kalman filter result comes as a byproduct.
+    The Kalman filter result comes as a byproduct.
 
     Parameters
     ----------
@@ -101,9 +101,7 @@ def run_kalman_smoother(x0, P0, F, G, Q, n_epochs, measurements=None, u=None, w=
     u : array_like, shape (n_epochs - 1, n_states) or (n_states,) or None, optional
         Input control vectors. If None (default) no control vectors are applied.
     w : array_like, shape (n_epochs - 1, n_noises) or (n_noises,) or None, optional
-        Noise mean offset vectors, typically are not used in basic Kalman filtering, but
-        may be required by other algorithms, which use the linear Kalman filter.
-        If None (default), assumed to be zero.
+        Noise mean offset vectors. If None (default), assumed to be zero.
 
     Returns
     -------

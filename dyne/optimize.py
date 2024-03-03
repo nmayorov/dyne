@@ -118,8 +118,13 @@ def run_optimization(X0, P0, f, Q, n_epochs, measurements=None,
                      ftol=1e-8, ctol=1e-8, max_iter=10):
     """Run batch optimization algorithm.
 
+    The algorithm is conceptually known for some time and described relatively well in
+    [1]_ for a sliding window optimization filter (see `run_mhf`).
+    An improved approach to nonlinear iterations (implemented here) is described in
+    [2]_.
+
     The iterations are terminated if both conditions controlled by `ftol` and `ctol`
-    are satisfied. Or the number of iterations exceeds `max_iter`.
+    are satisfied or the number of iterations exceeds `max_iter`.
 
     Parameters
     ----------
@@ -128,7 +133,7 @@ def run_optimization(X0, P0, f, Q, n_epochs, measurements=None,
     P0 : array_like, shape (n_states, n_states)
         Initial error covariance.
     f : callable
-        Process function, must follow `util.process_callable` interface.
+        Process function, must follow `dyne.util.process_callable` interface.
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrix. Either constant or specified for each
         transition.
@@ -143,8 +148,8 @@ def run_optimization(X0, P0, f, Q, n_epochs, measurements=None,
             - Z : array_like, shape (n, m)
                 Measurement vectors.
             - h : callable
-                The measurement function which must follow `util.measurement_callable`
-                interface.
+                The measurement function which must follow
+                `dyne.util.measurement_callable` interface.
             - R : array_like, shape (n, m, m) or (m, m)
                 Measurement noise covariance matrix specified for each epoch or a
                 single matrix, constant for each epoch.
@@ -177,6 +182,13 @@ def run_optimization(X0, P0, f, Q, n_epochs, measurements=None,
             State estimates computed by EKF.
         - Pf : ndarray, shape (n_epochs, n_states, n_states)
             Error covariance matrices for EKF estimates.
+
+    References
+    ----------
+    .. [1] M. L. Psiaki, "Backward-Smoothing Extended Kalman Filter",
+       Journal of Guidance, Control, and Dynamics 2005, Vol. 28, No. 5
+    .. [2] N. Mayorov, "Nonlinear batch estimation",
+       https://nmayorov.github.io/posts/nonlinear_batch_estimation/
     """
     n_states = len(X0)
 
@@ -208,6 +220,8 @@ def run_mhf(X0, P0, f, Q, n_epochs, measurements=None, window=5,
     information available up to epoch k is used) and in principle can be executed
     in real time.
 
+    See `run_optimize` for the references.
+
     Parameters
     ----------
     X0 : array_like, shape (n_states,)
@@ -215,7 +229,7 @@ def run_mhf(X0, P0, f, Q, n_epochs, measurements=None, window=5,
     P0 : array_like, shape (n_states, n_states)
         Initial error covariance.
     f : callable
-        Process function, must follow `util.process_callable` interface.
+        Process function, must follow `dyne.util.process_callable` interface.
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrix. Either constant or specified for each
         transition.
@@ -230,8 +244,8 @@ def run_mhf(X0, P0, f, Q, n_epochs, measurements=None, window=5,
             - Z : array_like, shape (n, m)
                 Measurement vectors.
             - h : callable
-                The measurement function which must follow `util.measurement_callable`
-                interface.
+                The measurement function which must follow
+                `dyne.util.measurement_callable` interface.
             - R : array_like, shape (n, m, m) or (m, m)
                 Measurement noise covariance matrix specified for each epoch or a
                 single matrix, constant for each epoch.

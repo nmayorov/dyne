@@ -8,18 +8,15 @@ from ._common import check_measurements
 def run_ukf(X0, P0, f, Q, n_epochs, measurements=None, alpha=1.0):
     """Run Unscented Kalman Filter.
 
-    Refer to [1]_, sec. 5.6.
-
-    The "unscented transform" is implemented with 2 * n points computed as
+    The "unscented transform" is implemented with ``2 * n points`` computed as
     ``m +- alpha * n**0.5 * s``, where
 
-        - ``m`` - current mean estimate
+        - ``m`` - current estimate
         - ``alpha`` - scaling parameter assumed to be (0, 1]
         - ``n`` - number of states
         - ``s`` - column of the root-covariance matrix
 
-    With ``alpha = 1`` the filter is also known as cubature Kalman filter [1]_,
-    sec. 6.6.
+    With ``alpha = 1`` the filter is also known as cubature Kalman Filter.
 
     Parameters
     ----------
@@ -28,7 +25,7 @@ def run_ukf(X0, P0, f, Q, n_epochs, measurements=None, alpha=1.0):
     P0 : array_like, shape (n_states, n_states)
         Initial error covariance.
     f : callable
-        Process function, must follow `util.process_callable` interface.
+        Process function, must follow `dyne.util.process_callable` interface.
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrix. Either constant or specified for each
         transition.
@@ -43,13 +40,15 @@ def run_ukf(X0, P0, f, Q, n_epochs, measurements=None, alpha=1.0):
             - Z : array_like, shape (n, m)
                 Measurement vectors.
             - h : callable
-                The measurement function which must follow `util.measurement_callable`
-                interface.
+                The measurement function which must follow
+                `dyne.util.measurement_callable` interface.
             - R : array_like, shape (n, m, m) or (m, m)
                 Measurement noise covariance matrix specified for each epoch or a
                 single matrix, constant for each epoch.
 
         None (default) corresponds to an empty list.
+    alpha : float, optional
+        Scaling factor for the unscented transform. Default is 1.
 
     Returns
     -------
@@ -59,10 +58,6 @@ def run_ukf(X0, P0, f, Q, n_epochs, measurements=None, alpha=1.0):
             State estimates.
         P : ndarray, shape (n_epochs, n_states, n_states)
             Error covariance estimates.
-
-    References
-    ----------
-    .. [1] S. Särkkä "Baysian Filtering and Smoothing"
     """
     n_states = len(X0)
     Q = np.asarray(Q)
