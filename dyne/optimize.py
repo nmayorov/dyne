@@ -1,9 +1,10 @@
 """Estimation algorithms based on optimization."""
 import numpy as np
 from scipy import linalg
-from .linear import run_kalman_smoother
+from .linear import _run_smoother
 from .ekf import run_ekf
 from .util import Bunch
+from ._common import check_measurements
 
 
 def _eval_quadratic_step(x0, P0, Q, measurements_lin, wp, x, w):
@@ -59,15 +60,19 @@ def _optimize(X0, P0, X, W, f, Q, measurements, start_epoch, stop_epoch,
         u = np.empty((n_epochs - 1, n_states))
         measurements_lin = []
 
-        for k in range(n_epochs):
-            measurements_lin.append([])
-            for Z, h, R in measurements[k]:
-                Z_pred, H = h(k + start_epoch, X[k])
-                measurements_lin[-1].append((Z - Z_pred, H, R))
+        for i in range(n_epochs):
+            k = i + start_epoch
+            meas_epoch = []
+            for epochs, Z, h, R in measurements:
+                index = np.searchsorted(epochs, k)
+                if index < len(epochs) and epochs[index] == k:
+                    Z_pred, H = h(k, X[i])
+                    meas_epoch.append((Z[index] - Z_pred, H, R[index]))
+            measurements_lin.append(meas_epoch)
 
-            if k + 1 < n_epochs:
-                X_pred, F[k], G[k] = f(k + start_epoch, X[k], W[k])
-                u[k] = X_pred - X[k + 1]
+            if i + 1 < n_epochs:
+                X_pred, F[i], G[i] = f(k, X[i], W[i])
+                u[i] = X_pred - X[i + 1]
 
         x0 = X0 - X[0]
         w = -W
@@ -77,7 +82,7 @@ def _optimize(X0, P0, X, W, f, Q, measurements, start_epoch, stop_epoch,
     mu = 1.0
     for iteration in range(max_iter):
         x0, F, G, measurements_lin, u, w, cost, cv_l1 = _build_linear_problem(X, W)
-        linear_result = run_kalman_smoother(x0, P0, F, G, Q, measurements_lin, u, w)
+        linear_result = _run_smoother(x0, P0, F, G, Q, measurements_lin, u, w)
         qp_cost_change, qp_grad_dot_step = _eval_quadratic_step(
             x0, P0, Q, measurements_lin, w, linear_result.x, linear_result.w)
         if qp_cost_change > 0:
@@ -109,7 +114,8 @@ def _optimize(X0, P0, X, W, f, Q, measurements, start_epoch, stop_epoch,
     return X, W, linear_result.P, linear_result.Q
 
 
-def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, ctol=1e-8, max_iter=10):
+def run_optimization(X0, P0, f, Q, n_epochs, measurements=None,
+                     ftol=1e-8, ctol=1e-8, max_iter=10):
     """Run batch optimization algorithm.
 
     The iterations are terminated if both conditions controlled by `ftol` and `ctol`
@@ -126,10 +132,24 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, ctol=1e-8, max_iter=
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrix. Either constant or specified for each
         transition.
-    measurements : list of n_epoch lists
-        Each list contains triples (Z, h, R) with measurement vector, measurement
-        function and measurement noise covariance. The measurement function must
-        follow `util.measurement_callable` interface.
+    n_epochs : int
+        Number of epochs for estimation.
+    measurements : list or None, optional
+        Each element defines a single independent type of measurement as a tuple
+        ``(epochs, Z, h, R)``, where
+
+            - epochs : array_like, shape (n,)
+                Epoch indices at which the measurement is available.
+            - Z : array_like, shape (n, m)
+                Measurement vectors.
+            - h : callable
+                The measurement function which must follow `util.measurement_callable`
+                interface.
+            - R : array_like, shape (n, m, m) or (m, m)
+                Measurement noise covariance matrix specified for each epoch or a
+                single matrix, constant for each epoch.
+
+        None (default) corresponds to an empty list.
     ftol : float, optional
         Required tolerance for termination by the change of the cost function.
         The iterations can be terminated if the relative cost change on the last
@@ -159,7 +179,6 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, ctol=1e-8, max_iter=
             Error covariance matrices for EKF estimates.
     """
     n_states = len(X0)
-    n_epochs = len(measurements)
 
     Q = np.asarray(Q)
     if Q.ndim == 2:
@@ -169,14 +188,15 @@ def run_optimization(X0, P0, f, Q, measurements, ftol=1e-8, ctol=1e-8, max_iter=
     if (X0.shape != (n_states,) or P0.shape != (n_states, n_states) or
             Q.shape != (n_epochs - 1, n_noises, n_noises)):
         raise ValueError("Inconsistent input shapes")
-
-    ekf_result = run_ekf(X0, P0, f, Q, measurements)
+    measurements = check_measurements(measurements)
+    ekf_result = run_ekf(X0, P0, f, Q, n_epochs, measurements)
     X, W, P, Q = _optimize(X0, P0, ekf_result.X, np.zeros((n_epochs - 1, n_noises)),
                            f, Q, measurements, 0, n_epochs, ftol, ctol, max_iter)
     return Bunch(X=X, P=P, W=W, Q=Q, Xf=ekf_result.X, Pf=ekf_result.P)
 
 
-def run_mhf(X0, P0, f, Q, measurements, window, ftol=1e-8, ctol=1e-8, max_iter=10):
+def run_mhf(X0, P0, f, Q, n_epochs, measurements=None, window=5,
+            ftol=1e-8, ctol=1e-8, max_iter=10):
     """Run moving horizon filter.
 
     This filter performs nonlinear optimization within a window of a given size.
@@ -199,12 +219,27 @@ def run_mhf(X0, P0, f, Q, measurements, window, ftol=1e-8, ctol=1e-8, max_iter=1
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrix. Either constant or specified for each
         transition.
-    measurements : list of n_epoch lists
-        Each list contains triples (Z, h, R) with measurement vector, measurement
-        function and measurement noise covariance. The measurement function must
-        follow `util.measurement_callable` interface.
-    window : int
+    n_epochs : int
+        Number of epochs for estimation.
+    measurements : list or None, optional
+        Each element defines a single independent type of measurement as a tuple
+        ``(epochs, Z, h, R)``, where
+
+            - epochs : array_like, shape (n,)
+                Epoch indices at which the measurement is available.
+            - Z : array_like, shape (n, m)
+                Measurement vectors.
+            - h : callable
+                The measurement function which must follow `util.measurement_callable`
+                interface.
+            - R : array_like, shape (n, m, m) or (m, m)
+                Measurement noise covariance matrix specified for each epoch or a
+                single matrix, constant for each epoch.
+
+        None (default) corresponds to an empty list.
+    window : int, optional
         Optimization window size. Value of 1 corresponds to iterated EKF algorithm.
+        Default is 5.
     ftol : float, optional
         Required tolerance for termination by the change of the cost function.
         The iterations can be terminated if the relative cost change on the last
@@ -226,7 +261,6 @@ def run_mhf(X0, P0, f, Q, measurements, window, ftol=1e-8, ctol=1e-8, max_iter=1
             Error covariance matrices.
     """
     n_states = len(X0)
-    n_epochs = len(measurements)
 
     Q = np.asarray(Q)
     if Q.ndim == 2:
@@ -236,6 +270,7 @@ def run_mhf(X0, P0, f, Q, measurements, window, ftol=1e-8, ctol=1e-8, max_iter=1
     if (X0.shape != (n_states,) or P0.shape != (n_states, n_states) or
             Q.shape != (n_epochs - 1, n_noises, n_noises)):
         raise ValueError("Inconsistent input shapes")
+    measurements = check_measurements(measurements)
 
     Xo = np.empty((0, n_states))
     Wo = np.empty((0, n_noises))
@@ -262,8 +297,8 @@ def run_mhf(X0, P0, f, Q, measurements, window, ftol=1e-8, ctol=1e-8, max_iter=1
         stop_epoch = k + 1
 
         Xo, Wo, Po, _ = _optimize(X0, P0, Xo, Wo, f, Q[start_epoch : stop_epoch - 1],
-                                  measurements[start_epoch : stop_epoch],
-                                  start_epoch, stop_epoch, ftol, ctol, max_iter)
+                                  measurements, start_epoch, stop_epoch, ftol, ctol,
+                                  max_iter)
         X[k] = Xo[-1]
         P[k] = Po[-1]
 
