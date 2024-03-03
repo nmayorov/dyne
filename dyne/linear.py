@@ -110,7 +110,7 @@ def run_kalman_smoother(x0, P0, F, G, Q, n_epochs, measurements=None, u=None, w=
         if z.shape != (n, m) or H.shape != (n, m, n_states) or R.shape != (n, m, m):
             raise ValueError("Inconsistent shapes in measurements")
 
-        meas.append([0, epochs, z, H, R])
+        meas.append([epochs, z, H, R])
 
     if (x0.shape != (n_states,) or
         P0.shape != (n_states, n_states) or
@@ -130,13 +130,12 @@ def run_kalman_smoother(x0, P0, F, G, Q, n_epochs, measurements=None, u=None, w=
 
     for epoch in range(n_epochs):
         smoother_data.append([])
-        for i, (index, epochs, z, H, R) in enumerate(meas):
-            if index >= len(epochs) or epoch != epochs[index]:
-                continue
-            xf[epoch], Pf[epoch], U, r, M = kf_update(xf[epoch], Pf[epoch],
-                                                      z[index], H[index], R[index])
-            smoother_data[-1].append((U, r, M))
-            meas[i][0] += 1
+        for epochs, z, H, R in meas:
+            index = np.searchsorted(epochs, epoch)
+            if index < len(epochs) and epochs[index] == epoch:
+                xf[epoch], Pf[epoch], U, r, M = kf_update(xf[epoch], Pf[epoch],
+                                                          z[index], H[index], R[index])
+                smoother_data[-1].append((U, r, M))
 
         if epoch + 1 < n_epochs:
             Fk = F[epoch]

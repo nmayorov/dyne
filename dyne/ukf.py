@@ -82,34 +82,31 @@ def run_ukf(X0, P0, f, Q, n_epochs, measurements=None, alpha=1.0):
     P[0] = P0
 
     for k in range(n_epochs):
-        for i, (index, epochs, Z, h, R) in enumerate(measurements):
-            if index >= len(epochs) or k != epochs[index]:
-                continue
+        for epochs, Z, h, R in measurements:
+            index = np.searchsorted(epochs, k)
+            if index < len(epochs) and epochs[index] == k:
+                Sigma = alpha * np.sqrt(n_states) * linalg.cholesky(P[k])
+                Z_probe = []
+                X_probe = []
+                # Default scipy cholesky gives U such that P = U^T U,
+                # we need to add columns of U^T or rows of U
+                for sigma in Sigma:
+                    for sign in [-1, 1]:
+                        X_probe.append(X[k] + sign * sigma)
+                        Z_probe.append(h(k, X_probe[-1], with_jacobian=False))
+                Z_probe = np.asarray(Z_probe)
+                Z_pred = np.mean(Z_probe, axis=0)
+                Z_probe -= Z_pred
 
-            Sigma = alpha * np.sqrt(n_states) * linalg.cholesky(P[k])
-            Z_probe = []
-            X_probe = []
-            # Default scipy cholesky gives U such that P = U^T U,
-            # we need to add columns of U^T or rows of U
-            for sigma in Sigma:
-                for sign in [-1, 1]:
-                    X_probe.append(X[k] + sign * sigma)
-                    Z_probe.append(h(k, X_probe[-1], with_jacobian=False))
-            Z_probe = np.asarray(Z_probe)
-            Z_pred = np.mean(Z_probe, axis=0)
-            Z_probe -= Z_pred
+                X_probe = np.asarray(X_probe)
+                X_probe -= X[k]
 
-            X_probe = np.asarray(X_probe)
-            X_probe -= X[k]
+                P_ee = Z_probe.T @ Z_probe / (alpha**2 * len(Z_probe)) + R[index]
+                P_zx = Z_probe.T @ X_probe / (alpha**2 * len(Z_probe))
+                K = linalg.cho_solve(linalg.cho_factor(P_ee), P_zx).T
 
-            P_ee = Z_probe.T @ Z_probe / (alpha**2 * len(Z_probe)) + R[index]
-            P_zx = Z_probe.T @ X_probe / (alpha**2 * len(Z_probe))
-            K = linalg.cho_solve(linalg.cho_factor(P_ee), P_zx).T
-
-            X[k] += K @ (Z[index] - Z_pred)
-            P[k] -= K @ P_ee @ K.T
-
-            measurements[i][0] += 1
+                X[k] += K @ (Z[index] - Z_pred)
+                P[k] -= K @ P_ee @ K.T
 
         if k + 1 < n_epochs:
             Sigma = alpha * np.sqrt(n_states + n_noises) * linalg.block_diag(

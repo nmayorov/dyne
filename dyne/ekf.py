@@ -66,14 +66,13 @@ def run_ekf(X0, P0, f, Q, n_epochs, measurements=None):
     P[0] = P0
 
     for k in range(n_epochs):
-        for i, (index, epochs, Z, h, R) in enumerate(measurements):
-            if index >= len(epochs) or k != epochs[index]:
-                continue
-            Z_pred, H = h(k, X[k])
-            x, P[k], *_ = kf_update(np.zeros(n_states), P[k], Z_pred - Z[index], H,
-                                    R[index])
-            X[k] -= x
-            measurements[i][0] += 1
+        for epochs, Z, h, R in measurements:
+            index = np.searchsorted(epochs, k)
+            if index < len(epochs) and epochs[index] == k:
+                Z_pred, H = h(k, X[k])
+                x, P[k], *_ = kf_update(np.zeros(n_states), P[k], Z_pred - Z[index], H,
+                                        R[index])
+                X[k] -= x
 
         if k + 1 < n_epochs:
             X[k + 1], F, G = f(k, X[k])

@@ -17,6 +17,6 @@ def check_measurements(measurements):
         if Z.shape != (n, m) or R.shape != (n, m, m):
             raise ValueError("Inconsistent shapes in measurements")
 
-        result.append([0, epochs, Z, h, R])
+        result.append((epochs, Z, h, R))
 
     return result
