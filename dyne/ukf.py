@@ -2,9 +2,10 @@
 import numpy as np
 from scipy import linalg
 from .util import Bunch
+from ._common import check_measurements
 
 
-def run_ukf(X0, P0, f, Q, measurements, alpha=1.0):
+def run_ukf(X0, P0, f, Q, n_epochs, measurements=None, alpha=1.0):
     """Run Unscented Kalman Filter.
 
     Refer to [1]_, sec. 5.6.
@@ -31,9 +32,24 @@ def run_ukf(X0, P0, f, Q, measurements, alpha=1.0):
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrix. Either constant or specified for each
         transition.
-    measurements : list of n_epoch lists
-        Each list contains triples (Z, h, R) with measurement vector, measurement
-        function and measurement noise covariance.
+    n_epochs : int
+        Number of epochs for estimation.
+    measurements : list or None, optional
+        Each element defines a single independent type of measurement as a tuple
+        ``(epochs, Z, h, R)``, where
+
+            - epochs : array_like, shape (n,)
+                Epoch indices at which the measurement is available.
+            - Z : array_like, shape (n, m)
+                Measurement vectors.
+            - h : callable
+                The measurement function which must follow `util.measurement_callable`
+                interface.
+            - R : array_like, shape (n, m, m) or (m, m)
+                Measurement noise covariance matrix specified for each epoch or a
+                single matrix, constant for each epoch.
+
+        None (default) corresponds to an empty list.
 
     Returns
     -------
@@ -49,7 +65,6 @@ def run_ukf(X0, P0, f, Q, measurements, alpha=1.0):
     .. [1] S. Särkkä "Baysian Filtering and Smoothing"
     """
     n_states = len(X0)
-    n_epochs = len(measurements)
     Q = np.asarray(Q)
     if Q.ndim == 2:
         Q = np.resize(Q, (n_epochs - 1, *Q.shape))
@@ -58,6 +73,7 @@ def run_ukf(X0, P0, f, Q, measurements, alpha=1.0):
     if (X0.shape != (n_states,) or P0.shape != (n_states, n_states) or
             Q.shape != (n_epochs - 1, n_noises, n_noises)):
         raise ValueError("Inconsistent input shapes")
+    measurements = check_measurements(measurements)
 
     X = np.empty((n_epochs, n_states))
     P = np.empty((n_epochs, n_states, n_states))
@@ -66,7 +82,10 @@ def run_ukf(X0, P0, f, Q, measurements, alpha=1.0):
     P[0] = P0
 
     for k in range(n_epochs):
-        for Z, h, R in measurements[k]:
+        for i, (index, epochs, Z, h, R) in enumerate(measurements):
+            if index >= len(epochs) or k != epochs[index]:
+                continue
+
             Sigma = alpha * np.sqrt(n_states) * linalg.cholesky(P[k])
             Z_probe = []
             X_probe = []
@@ -83,12 +102,14 @@ def run_ukf(X0, P0, f, Q, measurements, alpha=1.0):
             X_probe = np.asarray(X_probe)
             X_probe -= X[k]
 
-            P_ee = Z_probe.T @ Z_probe / (alpha**2 * len(Z_probe)) + R
+            P_ee = Z_probe.T @ Z_probe / (alpha**2 * len(Z_probe)) + R[index]
             P_zx = Z_probe.T @ X_probe / (alpha**2 * len(Z_probe))
             K = linalg.cho_solve(linalg.cho_factor(P_ee), P_zx).T
 
-            X[k] += K @ (Z - Z_pred)
+            X[k] += K @ (Z[index] - Z_pred)
             P[k] -= K @ P_ee @ K.T
+
+            measurements[i][0] += 1
 
         if k + 1 < n_epochs:
             Sigma = alpha * np.sqrt(n_states + n_noises) * linalg.block_diag(

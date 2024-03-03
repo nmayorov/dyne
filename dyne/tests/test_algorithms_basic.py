@@ -27,9 +27,10 @@ def test_ekf():
 
 
 def test_ukf():
-    X0, P0, Xt, _, f, Q, measurements = dyne.examples.generate_nonlinear_pendulum()
+    X0, P0, Xt, _, f, Q, n_epochs, measurements = (
+        dyne.examples.generate_nonlinear_pendulum())
     for alpha in [1e-2, 1e-1, 1, 2]:
-        result = dyne.run_ukf(X0, P0, f, Q, measurements, alpha=alpha)
+        result = dyne.run_ukf(X0, P0, f, Q, n_epochs, measurements, alpha=alpha)
         en = (result.X - Xt) / np.diagonal(result.P, axis1=1, axis2=2) ** 0.5
         assert np.all(dyne.util.rms(en) > 0.7)
         assert np.all(dyne.util.rms(en) < 1.3)
