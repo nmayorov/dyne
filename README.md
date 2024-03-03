@@ -22,15 +22,26 @@ With
 - $f_k$ - process function
 - $h_k$ - measurement function
 
+The system can be depicted as a chain graph:
+
+![chain graph](graph.png)
+
 The task is to estimate $X_k$ given the known process dynamics and measurements.
 
-At the moment the following algorithms are implemented in `dyne`:
+## Package content
 
-- Linear Kalman filter and smoother
-- Extended Kalman Filter
-- Unscented Kalman Filter
-- Moving Horizon Filter (windowed nonlinear optimization, backward-smoothing EKF)
-- Full nonlinear batch optimization (optimal nonlinear smoother)
+At the moment the following estimation algorithms are implemented in `dyne`:
+
+| Algorithm                 | Function            | Causal? | Requires Jacobian? |
+|---------------------------|---------------------|---------|--------------------|
+| Linear Kalman Smoother    | run_kalman_smoother | No      | Not applicable     |
+| Extended Kalman Filter    | run_ekf             | Yes     | Yes                | 
+| Unscented Kalman Filter   | run_ukf             | Yes     | No                 |
+| Moving Horizon Filter     | run_mhf             | Yes     | Yes                |
+| Batch Nonlinear Optimizer | run_optimization    | No      | Yes                |
+
+The file `examples.py` contains example problems which can be setup and run by all available 
+algorithms.
 
 ## Installation
 
