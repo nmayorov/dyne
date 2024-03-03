@@ -4,6 +4,60 @@ from scipy import linalg
 from .util import Bunch
 
 
+def _run_smoother(x0, P0, F, G, Q, measurements, u, w):
+    n_epochs = len(measurements)
+    n_states = len(x0)
+    n_noises = Q.shape[-1]
+
+    xf = np.empty((n_epochs, n_states))
+    Pf = np.empty((n_epochs, n_states, n_states))
+    xf[0] = x0
+    Pf[0] = P0
+    smoother_data = []
+
+    for epoch in range(n_epochs):
+        smoother_data.append([])
+        for z, H, R in measurements[epoch]:
+            xf[epoch], Pf[epoch], U, r, M = kf_update(xf[epoch], Pf[epoch], z, H, R)
+            smoother_data[-1].append((U, r, M))
+
+        if epoch + 1 < n_epochs:
+            Fk = F[epoch]
+            Gk = G[epoch]
+            xf[epoch + 1] = Fk @ xf[epoch] + Gk @ w[epoch] + u[epoch]
+            Pf[epoch + 1] = Fk @ Pf[epoch] @ Fk.T + Gk @ Q[epoch] @ Gk.T
+
+    lamb = np.zeros(n_states)
+    Lamb = np.zeros((n_states, n_states))
+
+    xs = np.empty((n_epochs, n_states))
+    Ps = np.empty((n_epochs, n_states, n_states))
+    ws = np.empty((n_epochs - 1, n_noises))
+    Qs = np.empty((n_epochs - 1, n_noises, n_noises))
+
+    for epoch in reversed(range(n_epochs)):
+        P = Pf[epoch]
+        xs[epoch] = xf[epoch] + P @ lamb
+        Ps[epoch] = P - P @ Lamb @ P
+
+        if epoch > 0:
+            Gk = G[epoch - 1]
+            Qk = Q[epoch - 1]
+            ws[epoch - 1] = w[epoch - 1] + Qk @ Gk.T @ lamb
+            Qs[epoch - 1] = Qk - Qk @ Gk.T @ Lamb @ Gk @ Qk
+
+        for U, r, M in reversed(smoother_data[epoch]):
+            lamb = U.T @ lamb + r
+            Lamb = U.T @ Lamb @ U + M
+
+        if epoch > 0:
+            Fk = F[epoch - 1]
+            lamb = Fk.T @ lamb
+            Lamb = Fk.T @ Lamb @ Fk
+
+    return Bunch(x=xs, P=Ps, w=ws, Q=Qs, xf=xf, Pf=Pf)
+
+
 def run_kalman_smoother(x0, P0, F, G, Q, n_epochs, measurements=None, u=None, w=None):
     """Run linear Kalman smoother.
 
@@ -122,56 +176,16 @@ def run_kalman_smoother(x0, P0, F, G, Q, n_epochs, measurements=None, u=None, w=
     ):
         raise ValueError("Inconsistent sizes of inputs")
 
-    xf = np.empty((n_epochs, n_states))
-    Pf = np.empty((n_epochs, n_states, n_states))
-    xf[0] = x0
-    Pf[0] = P0
-    smoother_data = []
-
+    meas_each_epoch = []
     for epoch in range(n_epochs):
-        smoother_data.append([])
+        meas_epoch = []
         for epochs, z, H, R in meas:
             index = np.searchsorted(epochs, epoch)
             if index < len(epochs) and epochs[index] == epoch:
-                xf[epoch], Pf[epoch], U, r, M = kf_update(xf[epoch], Pf[epoch],
-                                                          z[index], H[index], R[index])
-                smoother_data[-1].append((U, r, M))
+                meas_epoch.append((z[index], H[index], R[index]))
+        meas_each_epoch.append(meas_epoch)
 
-        if epoch + 1 < n_epochs:
-            Fk = F[epoch]
-            Gk = G[epoch]
-            xf[epoch + 1] = Fk @ xf[epoch] + Gk @ w[epoch] + u[epoch]
-            Pf[epoch + 1] = Fk @ Pf[epoch] @ Fk.T + Gk @ Q[epoch] @ Gk.T
-
-    lamb = np.zeros(n_states)
-    Lamb = np.zeros((n_states, n_states))
-
-    xs = np.empty((n_epochs, n_states))
-    Ps = np.empty((n_epochs, n_states, n_states))
-    ws = np.empty((n_epochs - 1, n_noises))
-    Qs = np.empty((n_epochs - 1, n_noises, n_noises))
-
-    for epoch in reversed(range(n_epochs)):
-        P = Pf[epoch]
-        xs[epoch] = xf[epoch] + P @ lamb
-        Ps[epoch] = P - P @ Lamb @ P
-
-        if epoch > 0:
-            Gk = G[epoch - 1]
-            Qk = Q[epoch - 1]
-            ws[epoch - 1] = w[epoch - 1] + Qk @ Gk.T @ lamb
-            Qs[epoch - 1] = Qk - Qk @ Gk.T @ Lamb @ Gk @ Qk
-
-        for U, r, M in reversed(smoother_data[epoch]):
-            lamb = U.T @ lamb + r
-            Lamb = U.T @ Lamb @ U + M
-
-        if epoch > 0:
-            Fk = F[epoch - 1]
-            lamb = Fk.T @ lamb
-            Lamb = Fk.T @ Lamb @ Fk
-
-    return Bunch(x=xs, P=Ps, w=ws, Q=Qs, xf=xf, Pf=Pf)
+    return _run_smoother(x0, P0, F, G, Q, meas_each_epoch, u, w)
 
 
 def kf_update(x, P, z, H, R):
