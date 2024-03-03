@@ -4,7 +4,7 @@ from scipy import linalg
 from .util import Bunch
 
 
-def run_kalman_smoother(x0, P0, F, G, Q, measurements, u=None, w=None):
+def run_kalman_smoother(x0, P0, F, G, Q, n_epochs, measurements=None, u=None, w=None):
     """Run linear Kalman smoother.
 
     The algorithm with explicit co-state recursion is implemented
@@ -26,9 +26,24 @@ def run_kalman_smoother(x0, P0, F, G, Q, measurements, u=None, w=None):
         Process noise input matrices.
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrices.
-    measurements : list of n_epochs lists
-        Each list contains tuples (z, H, R) with measurement vector, measurement matrix
-        and noise covariance matrix.
+    n_epochs : int
+        Number of epochs for estimation.
+    measurements : list or None, optional
+        Each element defines a single independent type of measurement as a tuple
+        ``(epochs, z, H, R)``, where
+
+            - epochs : array_like, shape (n,)
+                Epoch indices at which the measurement is available.
+            - z : array_like, shape (n, m)
+                Measurement vectors.
+            - H : array_like, shape (n, n_states, m) or (n_states, m)
+                Measurement matrices specified for each epoch or a single matrix,
+                constant for each epoch.
+            - R : array_like, shape (n, m, m) or (m, m)
+                Measurement noise covariance matrix specified for each epoch or a
+                single matrix, constant for each epoch.
+
+        None (default) corresponds to an empty list.
     u : array_like, shape (n_epochs - 1, n_states) or (n_states,) or None, optional
         Input control vectors. If None (default) no control vectors are applied.
     w : array_like, shape (n_epochs - 1, n_noises) or (n_noises,) or None, optional
@@ -61,7 +76,9 @@ def run_kalman_smoother(x0, P0, F, G, Q, measurements, u=None, w=None):
     x0 = np.asarray(x0)
     P0 = np.asarray(P0)
 
-    n_epochs = len(measurements)
+    if measurements is None:
+        measurements = []
+
     F = np.asarray(F)
     if F.ndim == 2:
         F = np.resize(F, (n_epochs - 1, *F.shape))
@@ -77,6 +94,23 @@ def run_kalman_smoother(x0, P0, F, G, Q, measurements, u=None, w=None):
 
     u = np.zeros((n_epochs - 1, n_states)) if u is None else np.asarray(u)
     w = np.zeros((n_epochs - 1, n_noises)) if w is None else np.asarray(w)
+
+    meas = []
+    for epochs, z, H, R in measurements:
+        z = np.asarray(z)
+        H = np.asarray(H)
+        if H.ndim == 2:
+            H = np.resize(H, (len(epochs), *H.shape))
+        R = np.asarray(R)
+        if R.ndim == 2:
+            R = np.resize(R, (len(epochs), *R.shape))
+
+        n = len(epochs)
+        m = z.shape[-1]
+        if z.shape != (n, m) or H.shape != (n, m, n_states) or R.shape != (n, m, m):
+            raise ValueError("Inconsistent shapes in measurements")
+
+        meas.append([0, epochs, z, H, R])
 
     if (x0.shape != (n_states,) or
         P0.shape != (n_states, n_states) or
@@ -96,9 +130,14 @@ def run_kalman_smoother(x0, P0, F, G, Q, measurements, u=None, w=None):
 
     for epoch in range(n_epochs):
         smoother_data.append([])
-        for z, H, R in measurements[epoch]:
-            xf[epoch], Pf[epoch], U, r, M = kf_update(xf[epoch], Pf[epoch], z, H, R)
+        for i, (index, epochs, z, H, R) in enumerate(meas):
+            if index >= len(epochs) or epoch != epochs[index]:
+                continue
+            xf[epoch], Pf[epoch], U, r, M = kf_update(xf[epoch], Pf[epoch],
+                                                      z[index], H[index], R[index])
             smoother_data[-1].append((U, r, M))
+            meas[i][0] += 1
+
         if epoch + 1 < n_epochs:
             Fk = F[epoch]
             Gk = G[epoch]

@@ -43,16 +43,15 @@ def generate_linear_pendulum(
 
     R = np.diag([sigma_angle**2, sigma_rate**2])
     H = np.identity(n_obs)
-    measurements = []
+    z = []
 
     for i in range(n_epoch):
-        measurements.append(
-            [(H @ xt[i] + rng.multivariate_normal(np.zeros(n_obs), R), H, R)])
+        z.append(H @ xt[i] + rng.multivariate_normal(np.zeros(n_obs), R))
         if i + 1 < n_epoch:
             wt[i] = rng.multivariate_normal(np.zeros(len(Q)), Q)
             xt[i + 1] = F @ xt[i] + G @ wt[i]
 
-    return x0, P0, xt, wt, F, G, Q, measurements
+    return x0, P0, xt, wt, F, G, Q, n_epoch, [(np.arange(n_epoch), z, H, R)]
 
 
 def generate_nonlinear_pendulum(

@@ -3,8 +3,9 @@ import dyne
 
 
 def test_kalman_smoother():
-    x0, P0, xt, wt, F, G, Q, measurements = dyne.examples.generate_linear_pendulum()
-    result = dyne.run_kalman_smoother(x0, P0, F, G, Q, measurements)
+    x0, P0, xt, wt, F, G, Q, n_epochs, measurements = (
+        dyne.examples.generate_linear_pendulum())
+    result = dyne.run_kalman_smoother(x0, P0, F, G, Q, n_epochs, measurements)
 
     efn = (result.xf - xt) / np.diagonal(result.Pf, axis1=1, axis2=2) ** 0.5
     eon = (result.x - xt) / np.diagonal(result.P, axis1=1, axis2=2) ** 0.5
