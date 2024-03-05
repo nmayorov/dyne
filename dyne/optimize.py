@@ -4,7 +4,7 @@ from scipy import linalg
 from .linear import _run_smoother
 from .ekf import run_ekf
 from .util import Bunch
-from ._common import check_measurements
+from ._common import check_input_arrays, check_measurements
 
 
 def _eval_quadratic_step(x0, P0, Q, measurements_lin, wp, x, w):
@@ -190,16 +190,7 @@ def run_optimization(X0, P0, f, Q, n_epochs, measurements=None,
     .. [2] N. Mayorov, "Nonlinear batch estimation",
        https://nmayorov.github.io/posts/nonlinear_batch_estimation/
     """
-    n_states = len(X0)
-
-    Q = np.asarray(Q)
-    if Q.ndim == 2:
-        Q = np.resize(Q, (n_epochs - 1, *Q.shape))
-    n_noises = Q.shape[-1]
-
-    if (X0.shape != (n_states,) or P0.shape != (n_states, n_states) or
-            Q.shape != (n_epochs - 1, n_noises, n_noises)):
-        raise ValueError("Inconsistent input shapes")
+    X0, P0, Q, n_states, n_noises = check_input_arrays(X0, P0, Q, n_epochs)
     measurements = check_measurements(measurements)
     ekf_result = run_ekf(X0, P0, f, Q, n_epochs, measurements)
     X, W, P, Q = _optimize(X0, P0, ekf_result.X, np.zeros((n_epochs - 1, n_noises)),
@@ -274,16 +265,7 @@ def run_mhf(X0, P0, f, Q, n_epochs, measurements=None, window=5,
         - P : ndarray, shape (n_epochs, n_states, n_states)
             Error covariance matrices.
     """
-    n_states = len(X0)
-
-    Q = np.asarray(Q)
-    if Q.ndim == 2:
-        Q = np.resize(Q, (n_epochs - 1, *Q.shape))
-    n_noises = Q.shape[-1]
-
-    if (X0.shape != (n_states,) or P0.shape != (n_states, n_states) or
-            Q.shape != (n_epochs - 1, n_noises, n_noises)):
-        raise ValueError("Inconsistent input shapes")
+    X0, P0, Q, n_states, n_noises = check_input_arrays(X0, P0, Q, n_epochs)
     measurements = check_measurements(measurements)
 
     Xo = np.empty((0, n_states))

@@ -2,7 +2,7 @@
 import numpy as np
 from scipy import linalg
 from .util import Bunch
-from ._common import check_measurements
+from ._common import check_input_arrays, check_measurements
 
 
 def run_ukf(X0, P0, f, Q, n_epochs, measurements=None, alpha=1.0):
@@ -59,22 +59,11 @@ def run_ukf(X0, P0, f, Q, n_epochs, measurements=None, alpha=1.0):
         P : ndarray, shape (n_epochs, n_states, n_states)
             Error covariance estimates.
     """
-    n_states = len(X0)
-    Q = np.asarray(Q)
-    if Q.ndim == 2:
-        Q = np.resize(Q, (n_epochs - 1, *Q.shape))
-    n_noises = Q.shape[-1]
-
-    X0 = np.asarray(X0)
-    P0 = np.asarray(P0)
-    if (X0.shape != (n_states,) or P0.shape != (n_states, n_states) or
-            Q.shape != (n_epochs - 1, n_noises, n_noises)):
-        raise ValueError("Inconsistent input shapes")
+    X0, P0, Q, n_states, n_noises = check_input_arrays(X0, P0, Q, n_epochs)
     measurements = check_measurements(measurements)
 
     X = np.empty((n_epochs, n_states))
     P = np.empty((n_epochs, n_states, n_states))
-
     X[0] = X0
     P[0] = P0
 
