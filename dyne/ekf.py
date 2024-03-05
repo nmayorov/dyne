@@ -54,6 +54,8 @@ def run_ekf(X0, P0, f, Q, n_epochs, measurements=None):
         Q = np.resize(Q, (n_epochs - 1, *Q.shape))
     n_noises = Q.shape[-1]
 
+    X0 = np.asarray(X0)
+    P0 = np.asarray(P0)
     if (X0.shape != (n_states,) or P0.shape != (n_states, n_states) or
             Q.shape != (n_epochs - 1, n_noises, n_noises)):
         raise ValueError("Inconsistent input shapes")
