@@ -1,6 +1,8 @@
 """Example of estimation problems."""
 import numpy as np
 from scipy._lib._util import check_random_state
+from .util import solve_ivp_with_jac
+from scipy.integrate import solve_ivp
 
 
 def generate_linear_pendulum(
@@ -197,3 +199,67 @@ def generate_nonlinear_pendulum(
             X, *_ = f(k, X, Wt[k])
 
     return X0, P0, Xt, Wt, f, Q, n_epochs, [(np.arange(n_epochs), Z, h, R)]
+
+
+def generate_falling_body(total_time=60, time_step=1,
+                          X0t=np.array([3e5, 2e4, 1e-3]),
+                          X0=np.array([3e5, 2e4, 3e-5]),
+                          P0=np.diag([1e3**2, 2e3**2, 1e-2**2]),
+                          rtol=1e-10,
+                          rng=0):
+    """
+    This example is taken from "Optimal Estimation of Dynamic Systems", 2nd edition,
+    sec. 3.7, where it is put as a demonstration of supposedly superior performance of
+    UKF versus EKF.
+
+    The example models the fall of a body in air with changing density using 3 states:
+    altitude, downward velocity and drag coefficient. The gravity is not included as a
+    negligible effect for high velocities. The system evolution is described by ODEs::
+
+        dx1 / dt = -x2
+        dx2 / dt = -exp(-alpha * x1) * x2**2 * x3
+        dx3 / dt = 0
+
+    There is no process noise. Range measurements from a radar to the body are available
+    every second.
+
+    The system is discretized in a proper way using Runge-Kutta integration with
+    simultaneous Jacobian evaluation.
+
+    As in the book specific true and filter initial conditions are used.
+    """
+    ALPHA = 5e-5
+    RADAR_M = 1e5
+    RADAR_Z = 1e5
+
+    rng = check_random_state(rng)
+
+    def ode_rhs(t, X):
+        return [-X[1], -np.exp(-ALPHA * X[0]) * X[1] ** 2 * X[2], 0.0]
+
+    def ode_rhs_jac(t, X):
+        return np.array([
+            [0, -np.exp(ALPHA * X[0]), 0],
+            [ALPHA * X[1] ** 2 * X[2], -2 * X[1] * X[2], -X[1] ** 2],
+            [0, 0, 0]
+        ]) * np.exp(-ALPHA * X[0])
+
+    def f(k, X, W=None, with_jacobian=True):
+        _, X, F, _ = solve_ivp_with_jac(ode_rhs, ode_rhs_jac,
+                                        [k * time_step, (k + 1) * time_step], X,
+                                        rtol=rtol)
+        return (X[-1], F[-1], np.empty((3, 0))) if with_jacobian else X[-1]
+
+    def h(k, X, with_jacobian=True):
+        Z = np.atleast_1d(np.hypot(RADAR_M, X[0] - RADAR_Z))
+        return (Z, np.array([[(X[0] - RADAR_Z) / Z[0], 0, 0]])) if with_jacobian else Z
+
+    Xt = solve_ivp(ode_rhs, [0, total_time], X0t,
+                   t_eval=np.arange(0, total_time, time_step), rtol=rtol).y.T
+    Z = []
+    R = np.array([[1e2**2]])
+    for k, X in enumerate(Xt):
+        Z.append(h(k, X, with_jacobian=False) + rng.multivariate_normal(np.zeros(1), R))
+    n_epochs = len(Z)
+    return (X0, P0, Xt, np.empty((n_epochs - 1, 0)), f, np.empty((n_epochs - 1, 0, 0)),
+            n_epochs, [(np.arange(n_epochs), Z, h, R)])
