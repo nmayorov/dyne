@@ -267,31 +267,53 @@ def generate_falling_body(total_time=60, time_step=1,
 
 def generate_lorenz_system(
     n_epochs=1000,
-    X0=np.array([10, -5, 5]),
-    P0=np.diag([5, 5, 5])**2,
-    tau=0.05,
+    X0t=np.array([10, -5, 5]),
+    X0=np.array([10, -5, 0]),
+    P0=np.diag([0.1, 0.1, 5])**2,
+    tau=0.1,
     sigma=10.0,
     beta=8.0/3.0,
     rho=28.0,
+    sigma_x=0,
+    sigma_y=0,
+    sigma_z=0,
     sigma_measurement_x=1.0,
+    measurement_epochs=None,
+    rtol=1e-10,
     rng=0
 ):
     """Prepare data for an example of Lorenz system.
 
     The continuous time system model is::
 
-        dx / dt = sigma * (y - x)
-        dy / dt = x * (rho - z) - y
-        dz / dt = x * y - beta * z
+        dx / dt = sigma * (y - x) + w_x
+        dy / dt = x * (rho - z) - y + w_y
+        dz / dt = x * y - beta * z + w_z
 
     The system was studied by Edward Lorenz and relate the thermal properties
     of a two-dimensional fluid layer. With default parameters sigma=10,
     beta=3/8, rho=28 the sytem exhibits chaotic behavior.
-    It is discretized with a time step `tau`.
+    It is discretized with a time step `tau`. For simplification noise is
+    applied in discrete time.
     """
     rng = check_random_state(rng)
+    if measurement_epochs is None:
+        measurement_epochs = np.arange(n_epochs)
+    else:
+        measurement_epochs = np.asarray(measurement_epochs)
 
-    def lorenz(state, sigma, beta, rho):
+    noises = np.array([sigma_x, sigma_y, sigma_z])
+    n_noises = np.sum(noises > 0)
+    G = np.zeros((3, n_noises))
+    Q = np.zeros((n_noises, n_noises))
+    j = 0
+    for i, s in enumerate(noises):
+        if s > 0:
+            G[i, j] = 1
+            Q[j, j] = s**2 * tau
+            j = j + 1
+
+    def lorenz(t, state):
         state = np.atleast_2d(state)
         x, y, z = state.T
         f = np.empty_like(state)
@@ -302,7 +324,7 @@ def generate_lorenz_system(
 
         return f[0] if len(f) == 1 else f
 
-    def lorenz_jacobian(state, sigma=10, beta=8/3, rho=28):
+    def lorenz_jacobian(t, state):
         state = np.atleast_2d(state)
         x, y, z = state.T
         F = np.empty((len(state), 3, 3))
@@ -319,39 +341,32 @@ def generate_lorenz_system(
 
         return F[0] if len(F) == 1 else F
 
-    def f(k, X, W=None, with_jacobian=True, max_step=tau):
-        sol = solve_ivp(lambda t, x: lorenz(x, sigma, beta, rho),
-                        (0, tau), X, max_step=max_step)
-        X_next = sol.y.T[-1]
-
-        if not with_jacobian:
-            return X_next
-        F0 = lorenz_jacobian(X)
-        F1 = lorenz_jacobian(X_next)
-        Phi = np.eye(3) + 0.5 * (F0 + F1) * tau
-        return X_next, Phi, np.zeros((3,3))
+    def f(k, X, W=None, with_jacobian=True):
+        _, X, F, _ = solve_ivp_with_jac(lorenz, lorenz_jacobian,
+                                        [k * tau, (k + 1) * tau], X,
+                                        rtol=rtol)
+        wk = G @ W if W is not None else 0
+        return (X[-1] + wk, F[-1], G) if with_jacobian else X[-1]
 
     def h(k, X, with_jacobian=True):
-        Z = np.array([X[0]])
-        if not with_jacobian:
-            return Z
-        return Z, np.array([[1, 0, 0]])
+        Z = np.atleast_1d(X[0])
+        return (Z, np.array([[1, 0, 0]])) if with_jacobian else Z
 
-    R = np.array([[sigma_measurement_x ** 2]])
-    X = rng.multivariate_normal(X0, P0)
+    X = X0t
     Xt = np.empty((n_epochs, 3))
-    Wt = None
-    Q = None
-    measurements = []
+    Wt = np.empty((n_epochs - 1, n_noises))
+    R = np.array([[sigma_measurement_x ** 2]])
+    Z = []
 
     for k in range(n_epochs):
         Xt[k] = X
-        Z = ( h(k, X, with_jacobian=False)
-             + rng.multivariate_normal(np.zeros(len(R)), R))
-        measurements.append([(Z, h, R)])
-
         if k + 1 < n_epochs:
-            X = f(k, X, W=None, with_jacobian=None, max_step=1e-3)
+            if len(Q) > 0:
+                Wt[k] = rng.multivariate_normal(np.zeros(len(Q)), Q)
+            X, *_ = f(k, X, Wt[k])
 
-    return X0, P0, Xt, Wt, f, Q, measurements
+    for m in measurement_epochs:
+        Z.append(Xt[m, 0] + rng.multivariate_normal(np.zeros(len(R)), R))
 
+    Q = np.array((n_epochs - 1) * [Q])
+    return X0, P0, Xt, Wt, f, Q, n_epochs, [(measurement_epochs, Z, h, R)]
