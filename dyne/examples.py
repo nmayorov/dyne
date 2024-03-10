@@ -346,7 +346,7 @@ def generate_lorenz_system(
                                         [k * tau, (k + 1) * tau], X,
                                         rtol=rtol)
         wk = G @ W if W is not None else 0
-        return (X[-1] + wk, F[-1], G) if with_jacobian else X[-1]
+        return (X[-1] + wk, F[-1], G) if with_jacobian else X[-1] + wk
 
     def h(k, X, with_jacobian=True):
         Z = np.atleast_1d(X[0])
