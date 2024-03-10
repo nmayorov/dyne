@@ -266,11 +266,11 @@ def generate_falling_body(total_time=60, time_step=1,
 
 
 def generate_lorenz_system(
-    n_epochs=1000,
+    n_epochs=1500,
     X0t=np.array([10, -5, 5]),
     X0=np.array([10, -5, 0]),
     P0=np.diag([0.1, 0.1, 5])**2,
-    tau=0.1,
+    tau=1e-2,
     sigma=10.0,
     beta=8.0/3.0,
     rho=28.0,
