@@ -276,7 +276,7 @@ def generate_lorenz_system(
     rho=28.0,
     q=np.zeros(3),
     sigma_measurement_x=1.0,
-    measurement_epochs=None,
+    measurement_subsample=1,
     rtol=1e-10,
     rng=0
 ):
@@ -296,11 +296,6 @@ def generate_lorenz_system(
     """
     rng = check_random_state(rng)
     n_epochs = np.round(total_time / time_step).astype(int)
-
-    if measurement_epochs is None:
-        measurement_epochs = np.arange(n_epochs)
-    else:
-        measurement_epochs = np.asarray(measurement_epochs)
 
     noises = np.asarray(q)
     n_noises = np.sum(noises > 0)
@@ -338,7 +333,7 @@ def generate_lorenz_system(
     def f(k, X, W=None, with_jacobian=True):
         _, X, F, _ = solve_ivp_with_jac(lorenz, lorenz_jacobian,
                                         [k * time_step, (k + 1) * time_step], X,
-                                        rtol=rtol)
+                                        rtol=rtol, method='DOP853')
         wk = G @ W if W is not None else 0
         return (X[-1] + wk, F[-1], G) if with_jacobian else X[-1] + wk
 
@@ -351,17 +346,19 @@ def generate_lorenz_system(
     Wt = np.empty((n_epochs - 1, n_noises))
     R = np.array([[sigma_measurement_x ** 2]])
     Z = []
+    measurement_epochs = []
 
     for k in range(n_epochs):
         Xt[k] = X
+        if k % measurement_subsample == 0:
+            vk = rng.multivariate_normal(np.zeros(len(R)), R)
+            Z.append(h(k, X, with_jacobian=False) + vk)
+            measurement_epochs.append(k)
+
         if k + 1 < n_epochs:
             if len(Q) > 0:
                 Wt[k] = rng.multivariate_normal(np.zeros(len(Q)), Q)
             X, *_ = f(k, X, Wt[k])
-
-    for m in measurement_epochs:
-        Z.append(h(m, Xt[m], with_jacobian=False)
-                 + rng.multivariate_normal(np.zeros(len(R)), R))
 
     Q = np.array((n_epochs - 1) * [Q])
     if X0 is None:
