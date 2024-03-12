@@ -263,3 +263,105 @@ def generate_falling_body(total_time=60, time_step=1,
     n_epochs = len(Z)
     return (X0, P0, Xt, np.empty((n_epochs - 1, 0)), f, np.empty((n_epochs - 1, 0, 0)),
             n_epochs, [(np.arange(n_epochs), Z, h, R)])
+
+
+def generate_lorenz_system(
+    total_time=15,
+    time_step=1e-2,
+    X0t=np.array([10, -5, 5]),
+    X0=None,
+    P0=np.diag([0.1, 0.1, 5])**2,
+    sigma=10.0,
+    beta=8.0/3.0,
+    rho=28.0,
+    q=np.zeros(3),
+    sigma_measurement_x=1.0,
+    measurement_subsample=1,
+    rtol=1e-10,
+    rng=0
+):
+    """Prepare data for an example of Lorenz system.
+
+    The continuous time system model is::
+
+        dx / dt = sigma * (y - x) + w_x
+        dy / dt = x * (rho - z) - y + w_y
+        dz / dt = x * y - beta * z + w_z
+
+    The system was studied by Edward Lorenz and relate the thermal properties
+    of a two-dimensional fluid layer. With default parameters sigma=10,
+    beta=3/8, rho=28 the sytem exhibits chaotic behavior.
+    It is discretized with a time step `time_step`. For simplification noise is
+    applied in discrete time.
+    """
+    rng = check_random_state(rng)
+    n_epochs = np.round(total_time / time_step).astype(int)
+
+    noises = np.asarray(q)
+    n_noises = np.sum(noises > 0)
+    G = np.zeros((3, n_noises))
+    Q = np.zeros((n_noises, n_noises))
+    j = 0
+    for i, s in enumerate(noises):
+        if s > 0:
+            G[i, j] = 1
+            Q[j, j] = s**2 * time_step
+            j = j + 1
+
+    def lorenz(t, state):
+        x, y, z = state
+        return np.array([sigma * (y - x),
+                         x * (rho - z) - y,
+                         x*y - beta*z])
+
+    def lorenz_jacobian(t, state):
+        x, y, z = state
+        F = np.zeros((3, 3))
+
+        F[0, 0] = -sigma
+        F[0, 1] =  sigma
+        F[0, 2] =  0
+        F[1, 0] =  rho - z
+        F[1, 1] = -1
+        F[1, 2] = -x
+        F[2, 0] =  y
+        F[2, 1] =  x
+        F[2, 2] = -beta
+
+        return F
+
+    def f(k, X, W=None, with_jacobian=True):
+        _, X, F, _ = solve_ivp_with_jac(lorenz, lorenz_jacobian,
+                                        [k * time_step, (k + 1) * time_step], X,
+                                        rtol=rtol, method='DOP853')
+        wk = G @ W if W is not None else 0
+        return (X[-1] + wk, F[-1], G) if with_jacobian else X[-1] + wk
+
+    def h(k, X, with_jacobian=True):
+        Z = np.atleast_1d(X[0])
+        return (Z, np.array([[1, 0, 0]])) if with_jacobian else Z
+
+    X = X0t
+    Xt = np.empty((n_epochs, 3))
+    Wt = np.empty((n_epochs - 1, n_noises))
+    R = np.array([[sigma_measurement_x ** 2]])
+    Z = []
+    measurement_epochs = []
+
+    for k in range(n_epochs):
+        Xt[k] = X
+        if k % measurement_subsample == 0:
+            vk = rng.multivariate_normal(np.zeros(len(R)), R)
+            Z.append(h(k, X, with_jacobian=False) + vk)
+            measurement_epochs.append(k)
+
+        if k + 1 < n_epochs:
+            if len(Q) > 0:
+                Wt[k] = rng.multivariate_normal(np.zeros(len(Q)), Q)
+            X, *_ = f(k, X, Wt[k])
+
+    Q = np.array((n_epochs - 1) * [Q])
+    if X0 is None:
+        X0 = X0t + rng.multivariate_normal(np.zeros(len(P0)), P0)
+
+    return X0, P0, Xt, Wt, f, Q, n_epochs, [(measurement_epochs, Z, h, R)]
