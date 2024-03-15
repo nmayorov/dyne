@@ -69,19 +69,19 @@ def test_mhf():
 
 def test_linear_equivalence():
     p_lin = dyne.examples.generate_linear_pendulum()
-    *_, f, _, _, measurements = dyne.examples.generate_linear_pendulum_as_nl_problem()
+    p_nl = dyne.examples.generate_linear_pendulum_as_nl_problem()
 
     kf_result = dyne.run_kalman_smoother(p_lin.x0, p_lin.P0, p_lin.F, p_lin.G, p_lin.Q,
                                          p_lin.n_epochs, p_lin.measurements)
 
     for algorithm, options in zip([dyne.run_ekf, dyne.run_ukf, dyne.run_mhf],
                                   [{}, {}, dict(window=1)]):
-        result = algorithm(p_lin.x0, p_lin.P0, f, p_lin.Q, p_lin.n_epochs,
-                           measurements, **options)
+        result = algorithm(p_nl.X0, p_nl.P0, p_nl.f, p_nl.Q, p_nl.n_epochs,
+                           p_nl.measurements, **options)
         difference = result.X - kf_result.xf
         assert np.all(np.abs(difference) < 1e-15)
 
-    result_opt = dyne.run_optimization(p_lin.x0, p_lin.P0, f, p_lin.Q, p_lin.n_epochs,
-                                       measurements)
+    result_opt = dyne.run_optimization(p_nl.X0, p_nl.P0, p_nl.f, p_nl.Q,
+                                       p_nl.n_epochs, p_nl.measurements)
     difference = result_opt.X - kf_result.x
     assert np.all(np.abs(difference) < 1e-15)

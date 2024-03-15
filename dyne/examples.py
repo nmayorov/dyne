@@ -8,7 +8,7 @@ from scipy.integrate import solve_ivp
 
 @dataclass
 class LinearProblemExample:
-    """Example for a linear estimation problem.
+    """Example of a linear estimation problem.
 
     Parameters
     ----------
@@ -25,7 +25,7 @@ class LinearProblemExample:
     n_epochs : int
         Number of epochs for estimation.
     measurements : list
-        List of measurement structures.
+        List of linear measurement structures.
         See `dyne.run_kalman_smoother` for a detailed definition.
     xt : ndarray, shape (n_epochs, n_states)
         True state for each epoch.
@@ -41,6 +41,40 @@ class LinearProblemExample:
     measurements : list | None
     xt : np.ndarray
     wt : np.ndarray
+
+
+@dataclass
+class NonlinearProblemExample:
+    """Example of a nonlinear estimation problem.
+
+    Parameters
+    ----------
+    X0 : ndarray, shape (n_states,)
+        Initial state.
+    P0 : ndarray, shape (n_states, n_states)
+        Initial covariance.
+    f : callable
+        Process function, see `dyne.util.process_callable`.
+    Q : ndarray, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
+        Process noise covariance matrices.
+    n_epochs : int
+        Number of epochs for estimation.
+    measurements : list
+        List of nonlinear measurement structures.
+        See `dyne.run_ekf` for a detailed definition.
+    Xt : ndarray, shape (n_epochs, n_states)
+        True state for each epoch.
+    Wt : ndarray, shape (n_epochs - 1, n_noises)
+        True noise values.
+    """
+    X0 : np.ndarray
+    P0 : np.ndarray
+    f : callable
+    Q : np.ndarray
+    n_epochs : int
+    measurements : list
+    Xt : np.ndarray
+    Wt : np.ndarray
 
 
 def generate_linear_pendulum(
@@ -126,7 +160,7 @@ def generate_linear_pendulum(
 
 
 def generate_linear_pendulum_as_nl_problem(
-    n_epoch=1000,
+    n_epochs=1000,
     x0=np.array([1.0, 0.0]),
     P0=np.diag([0.1**2, 0.05**2]),
     tau=0.1,
@@ -137,57 +171,33 @@ def generate_linear_pendulum_as_nl_problem(
     sigma_rate=0.1,
     rng=0,
 ):
-    """Prepare data for an example of linear pendulum with friction.
+    """Generate data for an example of a linear pendulum with friction.
 
-    The continuous system model is::
+    This function returns the problem defined in `generate_linear_pendulum` as a
+    general nonlinear problem which can be used for testing and verification purposes.
 
-        dx1 / dt = x2
-        dx2 / dt = -omega**2 * x1 - 2 * eta * omega * x2 + f
-
-    with ``f`` being an external force. It is discretized with a time step `tau`,
-    the external force is modeled as a random white sequence.
-
-    The measurements consist of both x1 and x2 (angle and angular rate).
-
-    This function returns the problem as a general nonlinear problem which can be
-    used for testing and verification purposes.
+    Returns
+    -------
+    NonlinearProblemExample
     """
-    rng = check_random_state(rng)
-    n_states = 2
-    n_noises = 1
-    n_obs = 2
-
-    xt = np.empty((n_epoch, n_states))
-    xt[0] = rng.multivariate_normal(x0, P0)
-
-    omega = 2 * np.pi / T
-    F = np.array([[1, tau], [-(omega ** 2) * tau, 1 - 2 * eta * omega * tau]])
-    G = np.array([[0], [1]])
-    Q = np.array([[tau * qf**2]])
-    wt = np.empty((n_epoch - 1, n_noises))
-
-    R = np.diag([sigma_angle**2, sigma_rate**2])
-    H = np.identity(n_obs)
-    z = []
+    lin_problem = generate_linear_pendulum(n_epochs, x0, P0, tau, T, eta, qf,
+                                           sigma_angle, sigma_rate, rng)
+    meas_epochs, z, H, R = lin_problem.measurements[0]
 
     def f(k, X, W=None, with_jacobian=True):
         if W is None:
             W = np.zeros(1)
-        X_next = F @ X + G @ W
+        X_next = lin_problem.F @ X + lin_problem.G @ W
         if not with_jacobian:
             return X_next
-        return X_next, F, G
+        return X_next, lin_problem.F, lin_problem.G
 
     def h(k, X, with_jacobian=True):
         return (H @ X, H) if with_jacobian else H @ X
 
-    for i in range(n_epoch):
-        z.append(H @ xt[i] + rng.multivariate_normal(np.zeros(n_obs), R))
-        if i + 1 < n_epoch:
-            wt[i] = rng.multivariate_normal(np.zeros(len(Q)), Q)
-            xt[i + 1] = F @ xt[i] + G @ wt[i]
-
-    return x0, P0, xt, wt, f, Q, n_epoch, [(np.arange(n_epoch), z, h, R)]
+    return NonlinearProblemExample(
+        lin_problem.x0, lin_problem.P0, f, lin_problem.Q, lin_problem.n_epochs,
+        [(meas_epochs, z, h, R)], lin_problem.xt, lin_problem.wt)
 
 
 def generate_nonlinear_pendulum(
