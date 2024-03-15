@@ -211,10 +211,10 @@ def generate_nonlinear_pendulum(
     sigma_omega=0.1,
     sigma_eta=0.01,
     sigma_f=0.5,
-    sigma_measurement_x=0.1,
+    sigma_angle=0.1,
     rng=0
 ):
-    """Prepare data for an example of nonlinear pendulum with friction.
+    """Generate data for an example of a nonlinear pendulum with friction.
 
     The continuous time system model is::
 
@@ -222,9 +222,42 @@ def generate_nonlinear_pendulum(
         dx2 / dt = -omega**2 * sin(x1) - 2 * eta * omega * x2 * (1 + xi * x2**2) + f
 
     with ``f`` being an external force. It is discretized with a time step `tau`.
-    It is discretized with a time step `tau`. The parameters ``omega`` and ``eta`` are
-    randomly perturbed by noise at each epoch, the external force is modeled as a
-    random white sequence.
+    The parameters ``omega`` and ``eta`` are randomly perturbed by noise at each epoch,
+    the external force is modeled as a random white sequence.
+
+    The measurements of ``x1`` (angle) are available.
+
+    Parameters
+    ----------
+    n_epochs : int
+        Number of epochs for simulation.
+    X0 : array_like, shape (2,)
+        Initial state.
+    P0 : array_like, shape (2, 2)
+        Initial state covariance.
+    tau : float
+        Time step in seconds.
+    T : float
+        Pendulum period in seconds.
+    eta : float
+        Dimensionless friction coefficient.
+    xi : float
+        Friction nonlinearity coefficient.
+    sigma_omega : float
+        Standard deviation of ``omega`` disturbance.
+    sigma_eta : float
+        Standard deviation of ``eta`` disturbance.
+    sigma_f : float
+        Standard deviation of external force sequence.
+    sigma_angle : float
+        Accuracy of angle measurements in rad.
+    rng : None, int or `numpy.random.RandomState`
+        Seed to create or already created RandomState. None (default) corresponds to
+        nondeterministic seeding.
+
+    Returns
+    -------
+    NonlinearProblemExample
     """
     rng = check_random_state(rng)
     omega = 2 * np.pi / T
@@ -262,7 +295,7 @@ def generate_nonlinear_pendulum(
             return Z
         return Z, np.array([[np.cos(X[0]), 0]])
 
-    R = np.array([[sigma_measurement_x ** 2]])
+    R = np.array([[sigma_angle ** 2]])
     X = rng.multivariate_normal(X0, P0)
     Xt = np.empty((n_epochs, 2))
     Wt = np.empty((n_epochs - 1, 3))
@@ -277,7 +310,8 @@ def generate_nonlinear_pendulum(
             Wt[k] = rng.multivariate_normal(np.zeros(len(Q)), Q)
             X, *_ = f(k, X, Wt[k])
 
-    return X0, P0, Xt, Wt, f, Q, n_epochs, [(np.arange(n_epochs), Z, h, R)]
+    return NonlinearProblemExample(X0, P0, f, Q, n_epochs,
+                                   [(np.arange(n_epochs), Z, h, R)], Xt, Wt)
 
 
 def generate_falling_body(total_time=60, time_step=1,
