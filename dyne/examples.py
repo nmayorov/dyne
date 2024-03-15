@@ -320,10 +320,11 @@ def generate_falling_body(total_time=60, time_step=1,
                           P0=np.diag([1e3**2, 2e3**2, 1e-2**2]),
                           rtol=1e-10,
                           rng=0):
-    """
+    """Generate data for an example with falling body in dense air.
+
     This example is taken from "Optimal Estimation of Dynamic Systems", 2nd edition,
     sec. 3.7, where it is put as a demonstration of supposedly superior performance of
-    UKF versus EKF.
+    UKF over EKF.
 
     The example models the fall of a body in air with changing density using 3 states:
     altitude, downward velocity and drag coefficient. The gravity is not included as a
@@ -340,12 +341,41 @@ def generate_falling_body(total_time=60, time_step=1,
     simultaneous Jacobian evaluation.
 
     As in the book specific true and filter initial conditions are used.
+
+    Parameters
+    ----------
+    total_time : float
+        Total simulation time.
+    time_step : float
+        Discrete time step.
+    X0t : array_like, shape (2,)
+        True initial state.
+    X0 : array_like, shape (2,) or None
+        Initial state for estimation. The concrete value proposed in [1] is set
+        by default. If None, then it is randomly generated from `X0t` and `P0`.
+    P0 : array_like, shape (3, 3)
+        Initial covariance.
+    rtol : float
+        Tolerance parameter (relative) for Runge-Kutta integrator.
+    rng : None, int or `numpy.random.RandomState`
+        Seed to create or already created RandomState. None (default) corresponds to
+        nondeterministic seeding.
+
+    Returns
+    -------
+    NonlinearProblemExample
     """
     ALPHA = 5e-5
     RADAR_M = 1e5
     RADAR_Z = 1e5
 
     rng = check_random_state(rng)
+    X0t = np.asarray(X0t)
+    P0 = np.asarray(P0)
+    if X0 is None:
+        X0 = X0t + rng.multivariate_normal(np.zeros_like(X0t), P0)
+    else:
+        X0 = np.asarray(X0)
 
     def ode_rhs(t, X):
         return [-X[1], -np.exp(-ALPHA * X[0]) * X[1] ** 2 * X[2], 0.0]
@@ -374,8 +404,10 @@ def generate_falling_body(total_time=60, time_step=1,
     for k, X in enumerate(Xt):
         Z.append(h(k, X, with_jacobian=False) + rng.multivariate_normal(np.zeros(1), R))
     n_epochs = len(Z)
-    return (X0, P0, Xt, np.empty((n_epochs - 1, 0)), f, np.empty((n_epochs - 1, 0, 0)),
-            n_epochs, [(np.arange(n_epochs), Z, h, R)])
+    return NonlinearProblemExample(
+        X0, P0, f, np.empty((n_epochs - 1, 0, 0)), n_epochs,
+        [(np.arange(n_epochs), Z, h, R)], Xt, np.empty((n_epochs - 1, 0))
+    )
 
 
 def generate_lorenz_system(
