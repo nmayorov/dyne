@@ -1,12 +1,50 @@
 """Example of estimation problems."""
+from dataclasses import dataclass
 import numpy as np
 from scipy._lib._util import check_random_state
 from .util import solve_ivp_with_jac
 from scipy.integrate import solve_ivp
 
 
+@dataclass
+class LinearProblemExample:
+    """Example for a linear estimation problem.
+
+    Parameters
+    ----------
+    x0 : ndarray, shape (n_states,)
+        Initial state.
+    P0 : ndarray, shape (n_states, n_states)
+        Initial covariance.
+    F : ndarray, shape (n_epochs - 1, n_states, n_states) or (n_states, n_states)
+        Process matrices.
+    G : ndarray, shape (n_epochs - 1, n_states, n_noises) or (n_states, n_noises)
+        Noise input matrices.
+    Q : ndarray, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
+        Process noise covariance matrices.
+    n_epochs : int
+        Number of epochs for estimation.
+    measurements : list
+        List of measurement structures.
+        See `dyne.run_kalman_smoother` for a detailed definition.
+    xt : ndarray, shape (n_epochs, n_states)
+        True state for each epoch.
+    wt : ndarray, shape (n_epochs - 1, n_noises)
+        True noise values.
+    """
+    x0 : np.ndarray
+    P0 : np.ndarray
+    F : np.ndarray
+    G : np.ndarray
+    Q : np.ndarray
+    n_epochs : int
+    measurements : list | None
+    xt : np.ndarray
+    wt : np.ndarray
+
+
 def generate_linear_pendulum(
-    n_epoch=1000,
+    n_epochs=1000,
     x0=np.array([1.0, 0.0]),
     P0=np.diag([0.1**2, 0.05**2]),
     tau=0.1,
@@ -17,7 +55,7 @@ def generate_linear_pendulum(
     sigma_rate=0.1,
     rng=0,
 ):
-    """Prepare data for an example of linear pendulum with friction.
+    """Generate data for an example of a linear pendulum with friction.
 
     The continuous system model is::
 
@@ -28,32 +66,63 @@ def generate_linear_pendulum(
     the external force is modeled as a random white sequence.
 
     The measurements consist of both x1 and x2 (angle and angular rate).
+
+    Parameters
+    ----------
+    n_epochs : int
+        Number of epochs for simulation.
+    x0 : array_like, shape (2,)
+        Initial state.
+    P0 : array_like, shape (2, 2)
+        Initial state covariance.
+    tau : float
+        Time step in seconds.
+    T : float
+        Pendulum period in seconds.
+    eta : float
+        Dimensionless friction coefficient.
+    qf : float
+        Intensity of force process in rad/s/sqrt(s)
+    sigma_angle : float
+        Accuracy of angle measurements in rad.
+    sigma_rate : float
+        Accuracy of angular rate measurements in rad/s.
+    rng : None, int or `numpy.random.RandomState`
+        Seed to create or already created RandomState. None (default) corresponds to
+        nondeterministic seeding.
+
+    Returns
+    -------
+    LinearProblemExample
     """
     rng = check_random_state(rng)
     n_states = 2
     n_noises = 1
     n_obs = 2
 
-    xt = np.empty((n_epoch, n_states))
+    x0 = np.asarray(x0)
+    P0 = np.asarray(P0)
+    xt = np.empty((n_epochs, n_states))
     xt[0] = rng.multivariate_normal(x0, P0)
 
     omega = 2 * np.pi / T
     F = np.array([[1, tau], [-(omega ** 2) * tau, 1 - 2 * eta * omega * tau]])
     G = np.array([[0], [1]])
     Q = np.array([[tau * qf**2]])
-    wt = np.empty((n_epoch - 1, n_noises))
+    wt = np.empty((n_epochs - 1, n_noises))
 
     R = np.diag([sigma_angle**2, sigma_rate**2])
     H = np.identity(n_obs)
     z = []
 
-    for i in range(n_epoch):
+    for i in range(n_epochs):
         z.append(H @ xt[i] + rng.multivariate_normal(np.zeros(n_obs), R))
-        if i + 1 < n_epoch:
+        if i + 1 < n_epochs:
             wt[i] = rng.multivariate_normal(np.zeros(len(Q)), Q)
             xt[i + 1] = F @ xt[i] + G @ wt[i]
 
-    return x0, P0, xt, wt, F, G, Q, n_epoch, [(np.arange(n_epoch), z, H, R)]
+    return LinearProblemExample(x0, P0, F, G, Q, n_epochs,
+                                [(np.arange(n_epochs), z, H, R)], xt, wt)
 
 
 def generate_linear_pendulum_as_nl_problem(
