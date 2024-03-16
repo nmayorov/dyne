@@ -38,7 +38,7 @@ class LinearProblemExample:
     G : np.ndarray
     Q : np.ndarray
     n_epochs : int
-    measurements : list | None
+    measurements : list
     xt : np.ndarray
     wt : np.ndarray
 
