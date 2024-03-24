@@ -58,7 +58,7 @@ def _run_smoother(x0, P0, F, G, Q, measurements, u, w):
     return Bunch(x=xs, P=Ps, w=ws, Q=Qs, xf=xf, Pf=Pf)
 
 
-def run_kalman_smoother(x0, P0, F, G, Q, measurements, n_epochs, u=None, w=None):
+def run_kalman_smoother(x0, P0, F, G, Q, measurements, n_epochs):
     """Run linear Kalman smoother.
 
     The algorithm with explicit co-state recursion is implemented
@@ -98,10 +98,6 @@ def run_kalman_smoother(x0, P0, F, G, Q, measurements, n_epochs, u=None, w=None)
         None (default) corresponds to an empty list.
     n_epochs : int
         Number of epochs for estimation.
-    u : array_like, shape (n_epochs - 1, n_states) or (n_states,) or None, optional
-        Input control vectors. If None (default) no control vectors are applied.
-    w : array_like, shape (n_epochs - 1, n_noises) or (n_noises,) or None, optional
-        Noise mean offset vectors. If None (default), assumed to be zero.
 
     Returns
     -------
@@ -144,9 +140,6 @@ def run_kalman_smoother(x0, P0, F, G, Q, measurements, n_epochs, u=None, w=None)
     n_states = len(x0)
     n_noises = G.shape[-1]
 
-    u = np.zeros((n_epochs - 1, n_states)) if u is None else np.asarray(u)
-    w = np.zeros((n_epochs - 1, n_noises)) if w is None else np.asarray(w)
-
     meas = []
     for epochs, z, H, R in measurements:
         z = np.asarray(z)
@@ -168,9 +161,7 @@ def run_kalman_smoother(x0, P0, F, G, Q, measurements, n_epochs, u=None, w=None)
         P0.shape != (n_states, n_states) or
         F.shape != (n_epochs - 1, n_states, n_states) or
         G.shape != (n_epochs - 1, n_states, n_noises) or
-        Q.shape != (n_epochs - 1, n_noises, n_noises) or
-        u.shape != (n_epochs - 1, n_states) or
-        w.shape != (n_epochs - 1, n_noises)
+        Q.shape != (n_epochs - 1, n_noises, n_noises)
     ):
         raise ValueError("Inconsistent sizes of inputs")
 
@@ -183,7 +174,9 @@ def run_kalman_smoother(x0, P0, F, G, Q, measurements, n_epochs, u=None, w=None)
                 meas_epoch.append((z[index], H[index], R[index]))
         meas_each_epoch.append(meas_epoch)
 
-    return _run_smoother(x0, P0, F, G, Q, meas_each_epoch, u, w)
+    return _run_smoother(x0, P0, F, G, Q, meas_each_epoch,
+                         np.zeros((n_epochs - 1, n_states)),
+                         np.zeros((n_epochs - 1, n_noises)))
 
 
 def _kalman_update(x, P, z, H, R):
