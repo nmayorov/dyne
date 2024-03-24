@@ -58,7 +58,7 @@ def _run_smoother(x0, P0, F, G, Q, measurements, u, w):
     return Bunch(x=xs, P=Ps, w=ws, Q=Qs, xf=xf, Pf=Pf)
 
 
-def run_kalman_smoother(x0, P0, F, G, Q, n_epochs, measurements=None, u=None, w=None):
+def run_kalman_smoother(x0, P0, F, G, Q, measurements, n_epochs, u=None, w=None):
     """Run linear Kalman smoother.
 
     The algorithm with explicit co-state recursion is implemented
@@ -80,9 +80,7 @@ def run_kalman_smoother(x0, P0, F, G, Q, n_epochs, measurements=None, u=None, w=
         Process noise input matrices.
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrices.
-    n_epochs : int
-        Number of epochs for estimation.
-    measurements : list or None, optional
+    measurements : list
         Each element defines a single independent type of measurement as a tuple
         ``(epochs, z, H, R)``, where
 
@@ -98,6 +96,8 @@ def run_kalman_smoother(x0, P0, F, G, Q, n_epochs, measurements=None, u=None, w=
                 single matrix, constant for each epoch.
 
         None (default) corresponds to an empty list.
+    n_epochs : int
+        Number of epochs for estimation.
     u : array_like, shape (n_epochs - 1, n_states) or (n_states,) or None, optional
         Input control vectors. If None (default) no control vectors are applied.
     w : array_like, shape (n_epochs - 1, n_noises) or (n_noises,) or None, optional

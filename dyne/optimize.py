@@ -114,7 +114,7 @@ def _optimize(X0, P0, X, W, f, Q, measurements, start_epoch, stop_epoch,
     return X, W, linear_result.P, linear_result.Q
 
 
-def run_optimization(X0, P0, f, Q, n_epochs, measurements=None,
+def run_optimization(X0, P0, f, Q, measurements, n_epochs,
                      ftol=1e-8, ctol=1e-8, max_iter=10):
     """Run batch optimization algorithm.
 
@@ -137,9 +137,7 @@ def run_optimization(X0, P0, f, Q, n_epochs, measurements=None,
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrix. Either constant or specified for each
         transition.
-    n_epochs : int
-        Number of epochs for estimation.
-    measurements : list or None, optional
+    measurements : list
         Each element defines a single independent type of measurement as a tuple
         ``(epochs, Z, h, R)``, where
 
@@ -155,6 +153,8 @@ def run_optimization(X0, P0, f, Q, n_epochs, measurements=None,
                 single matrix, constant for each epoch.
 
         None (default) corresponds to an empty list.
+    n_epochs : int
+        Number of epochs for estimation.
     ftol : float, optional
         Required tolerance for termination by the change of the cost function.
         The iterations can be terminated if the relative cost change on the last
@@ -192,13 +192,13 @@ def run_optimization(X0, P0, f, Q, n_epochs, measurements=None,
     """
     X0, P0, Q, n_states, n_noises = check_input_arrays(X0, P0, Q, n_epochs)
     measurements = check_measurements(measurements)
-    ekf_result = run_ekf(X0, P0, f, Q, n_epochs, measurements)
+    ekf_result = run_ekf(X0, P0, f, Q,  measurements, n_epochs)
     X, W, P, Q = _optimize(X0, P0, ekf_result.X, np.zeros((n_epochs - 1, n_noises)),
                            f, Q, measurements, 0, n_epochs, ftol, ctol, max_iter)
     return Bunch(X=X, P=P, W=W, Q=Q, Xf=ekf_result.X, Pf=ekf_result.P)
 
 
-def run_mhf(X0, P0, f, Q, n_epochs, measurements=None, window=5,
+def run_mhf(X0, P0, f, Q, measurements, n_epochs, window=5,
             ftol=1e-8, ctol=1e-8, max_iter=10):
     """Run moving horizon filter.
 
@@ -224,9 +224,7 @@ def run_mhf(X0, P0, f, Q, n_epochs, measurements=None, window=5,
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrix. Either constant or specified for each
         transition.
-    n_epochs : int
-        Number of epochs for estimation.
-    measurements : list or None, optional
+    measurements : list
         Each element defines a single independent type of measurement as a tuple
         ``(epochs, Z, h, R)``, where
 
@@ -242,6 +240,8 @@ def run_mhf(X0, P0, f, Q, n_epochs, measurements=None, window=5,
                 single matrix, constant for each epoch.
 
         None (default) corresponds to an empty list.
+    n_epochs : int
+        Number of epochs for estimation.
     window : int, optional
         Optimization window size. Value of 1 corresponds to iterated EKF algorithm.
         Default is 5.

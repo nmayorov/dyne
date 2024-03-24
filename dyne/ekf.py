@@ -5,7 +5,7 @@ from .util import Bunch
 from ._common import check_input_arrays, check_measurements
 
 
-def run_ekf(X0, P0, f, Q, n_epochs, measurements=None):
+def run_ekf(X0, P0, f, Q, measurements, n_epochs):
     """Run Extended Kalman Filter.
 
     Parameters
@@ -19,9 +19,7 @@ def run_ekf(X0, P0, f, Q, n_epochs, measurements=None):
     Q : array_like, shape (n_epochs - 1, n_noises, n_noises) or (n_noises, n_noises)
         Process noise covariance matrix. Either constant or specified for each
         transition.
-    n_epochs : int
-        Number of epochs for estimation.
-    measurements : list or None, optional
+    measurements : list
         Each element defines a single independent type of measurement as a tuple
         ``(epochs, Z, h, R)``, where
 
@@ -37,6 +35,8 @@ def run_ekf(X0, P0, f, Q, n_epochs, measurements=None):
                 single matrix, constant for each epoch.
 
         None (default) corresponds to an empty list.
+    n_epochs : int
+        Number of epochs for estimation.
 
     Returns
     -------

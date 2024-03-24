@@ -37,8 +37,8 @@ class LinearProblemExample:
     F : np.ndarray
     G : np.ndarray
     Q : np.ndarray
-    n_epochs : int
     measurements : list
+    n_epochs : int
     xt : np.ndarray
     wt : np.ndarray
 
@@ -71,8 +71,8 @@ class NonlinearProblemExample:
     P0 : np.ndarray
     f : callable
     Q : np.ndarray
-    n_epochs : int
     measurements : list
+    n_epochs : int
     Xt : np.ndarray
     Wt : np.ndarray
 
@@ -155,8 +155,8 @@ def generate_linear_pendulum(
             wt[i] = rng.multivariate_normal(np.zeros(len(Q)), Q)
             xt[i + 1] = F @ xt[i] + G @ wt[i]
 
-    return LinearProblemExample(x0, P0, F, G, Q, n_epochs,
-                                [(np.arange(n_epochs), z, H, R)], xt, wt)
+    return LinearProblemExample(x0, P0, F, G, Q, [(np.arange(n_epochs), z, H, R)],
+                                n_epochs, xt, wt)
 
 
 def generate_linear_pendulum_as_nl_problem(
@@ -196,8 +196,8 @@ def generate_linear_pendulum_as_nl_problem(
         return (H @ X, H) if with_jacobian else H @ X
 
     return NonlinearProblemExample(
-        lin_problem.x0, lin_problem.P0, f, lin_problem.Q, lin_problem.n_epochs,
-        [(meas_epochs, z, h, R)], lin_problem.xt, lin_problem.wt)
+        lin_problem.x0, lin_problem.P0, f, lin_problem.Q, [(meas_epochs, z, h, R)],
+        lin_problem.n_epochs, lin_problem.xt, lin_problem.wt)
 
 
 def generate_nonlinear_pendulum(
@@ -310,8 +310,8 @@ def generate_nonlinear_pendulum(
             Wt[k] = rng.multivariate_normal(np.zeros(len(Q)), Q)
             X, *_ = f(k, X, Wt[k])
 
-    return NonlinearProblemExample(X0, P0, f, Q, n_epochs,
-                                   [(np.arange(n_epochs), Z, h, R)], Xt, Wt)
+    return NonlinearProblemExample(X0, P0, f, Q, [(np.arange(n_epochs), Z, h, R)],
+                                   n_epochs, Xt, Wt)
 
 
 def generate_falling_body(total_time=60, time_step=1,
@@ -405,9 +405,8 @@ def generate_falling_body(total_time=60, time_step=1,
         Z.append(h(k, X, with_jacobian=False) + rng.multivariate_normal(np.zeros(1), R))
     n_epochs = len(Z)
     return NonlinearProblemExample(
-        X0, P0, f, np.empty((n_epochs - 1, 0, 0)), n_epochs,
-        [(np.arange(n_epochs), Z, h, R)], Xt, np.empty((n_epochs - 1, 0))
-    )
+        X0, P0, f, np.empty((n_epochs - 1, 0, 0)), [(np.arange(n_epochs), Z, h, R)],
+        n_epochs, Xt, np.empty((n_epochs - 1, 0)))
 
 
 def generate_lorenz_system(
@@ -532,5 +531,5 @@ def generate_lorenz_system(
     if X0 is None:
         X0 = X0t + rng.multivariate_normal(np.zeros(len(P0)), P0)
 
-    return NonlinearProblemExample(X0, P0, f, Q, n_epochs,
-                                   [(measurement_epochs, Z, h, R)], Xt, Wt)
+    return NonlinearProblemExample(X0, P0, f, Q, [(measurement_epochs, Z, h, R)],
+                                   n_epochs, Xt, Wt)
