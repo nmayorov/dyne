@@ -198,7 +198,7 @@ def run_optimization(X0, P0, f, Q, measurements, n_epochs,
     return Bunch(X=X, P=P, W=W, Q=Q, Xf=ekf_result.X, Pf=ekf_result.P)
 
 
-def run_mhf(X0, P0, f, Q, measurements, n_epochs, window=5,
+def run_mhf(X0, P0, f, Q, measurements, n_epochs, window,
             ftol=1e-8, ctol=1e-8, max_iter=10):
     """Run moving horizon filter.
 
@@ -242,9 +242,8 @@ def run_mhf(X0, P0, f, Q, measurements, n_epochs, window=5,
         None (default) corresponds to an empty list.
     n_epochs : int
         Number of epochs for estimation.
-    window : int, optional
+    window : int
         Optimization window size. Value of 1 corresponds to iterated EKF algorithm.
-        Default is 5.
     ftol : float, optional
         Required tolerance for termination by the change of the cost function.
         The iterations can be terminated if the relative cost change on the last
