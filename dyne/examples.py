@@ -555,7 +555,7 @@ def generate_magnetic_heading(
 
     Roll, pitch and heading angles are varying according to a given harmonic law.
     Exact values of roll and pitch are known, heading and magnetometer biases
-    should be estimated.
+    are to be estimated.
 
     The discrete time system model is::
 
@@ -577,8 +577,8 @@ def generate_magnetic_heading(
 
     Where::
 
-        C_bn - rotation matrix from ``body`` to ``world`` frame
-        mn, me, md - magnetic field in ``world`` frame, componets of `magnetic_field_n`
+        C_bn - rotation matrix from body to world frame
+        mn, me, md - magnetic field in world frame, componets of `magnetic_field_n`
         bx, by, bz - magnetometer biases, components of `mag_bias`
         mx, my, mz - magnetometer measurements
 
@@ -597,7 +597,7 @@ def generate_magnetic_heading(
     rph_change_phase_offset: array_like, shape (3,)
         Phase offset for sinusoid part in degrees.
     magnetic_field_n: array_like, shape (3,)
-        Magnetic field in ``world`` frame.
+        Components of magnetic field expressed in the world frame (denoted as n).
     mag_bias: array_like, shape (3,)
         Magnetometer measurements bias.
     X0 : array_like, shape (4,) or None
