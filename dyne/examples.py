@@ -4,6 +4,7 @@ import numpy as np
 from scipy._lib._util import check_random_state
 from .util import solve_ivp_with_jac
 from scipy.integrate import solve_ivp
+from scipy.spatial.transform import Rotation
 
 
 @dataclass
@@ -522,6 +523,161 @@ def generate_lorenz_system(
             Z.append(h(k, X, with_jacobian=False) +
                      rng.multivariate_normal(np.zeros(len(R)), R))
             measurement_epochs.append(k)
+
+        if k + 1 < n_epochs:
+            if len(Q) > 0:
+                Wt[k] = rng.multivariate_normal(np.zeros(len(Q)), Q)
+            X = f(k, X, Wt[k], with_jacobian=False)
+
+    if X0 is None:
+        X0 = X0t + rng.multivariate_normal(np.zeros(len(P0)), P0)
+
+    return NonlinearProblemExample(X0, P0, f, Q, [(measurement_epochs, Z, h, R)],
+                                   n_epochs, Xt, Wt)
+
+
+def generate_magnetic_heading(
+    total_time=120,
+    time_step=0.1,
+    rph_mean=[3, -5, 0],
+    rph_change_amplitude=5,
+    rph_change_period=[5, 5, 30],
+    rph_change_phase_offset=[0, 90, 45],
+    magnetic_field_n=[10, 3, 40],
+    mag_bias=[30, -20, 70],
+    X0=None,
+    P0=np.diag([180, 50, 50, 50])**2,
+    q=np.zeros(4),
+    measurement_sd=[1, 1, 1],
+    rng=0
+):
+    """Generate data for exapmle of heading estimation using biased magnetometer data.
+
+    Roll, pitch and heading angles are varying according to a given harmonic law.
+    Exact values of roll and pitch are known, heading and magnetometer biases
+    are to be estimated.
+
+    The discrete time system model is::
+
+        h[k+1] = h[k] + dh[k] + w_h[k]
+        bx[k+1] = bx[k] + w_x[k]
+        by[k+1] = by[k] + w_y[k]
+        bz[k+1] = bz[k] + w_z[k]
+
+    Where::
+
+        h  - heading
+        dh - known heading increment, used as control
+        bx, by, bz - magnetometer biases, components of `mag_bias`
+        wx, wy, wz - discrete noise
+
+    The measurement model is::
+
+        [mx, my, mz] = C_bn @ [mn, me, md] + [bx, by, bz]
+
+    Where::
+
+        C_bn - rotation matrix from body to world frame
+        mn, me, md - magnetic field in world frame, componets of `magnetic_field_n`
+        bx, by, bz - magnetometer biases, components of `mag_bias`
+        mx, my, mz - magnetometer measurements
+
+    Parameters
+    ----------
+    total_time : float
+        Total time of the simulation.
+    time_step : float
+        Discretization time step.
+    rph_mean: array_like, shape (3,)
+        Mean value of angles in degrees.
+    rph_change_amplitude: float or array_like, shape (3,)
+        Amplitude of angles variation in degrees.
+    rph_change_period: float or array_like, shape (3,)
+        Period of sinusoidal angles change in seconds.
+    rph_change_phase_offset: array_like, shape (3,)
+        Phase offset for sinusoid part in degrees.
+    magnetic_field_n: array_like, shape (3,)
+        Components of magnetic field expressed in the world frame (denoted as n).
+    mag_bias: array_like, shape (3,)
+        Magnetometer measurements bias.
+    X0 : array_like, shape (4,) or None
+        Initial estimator state. If None, generate it randomly from trajectory and `P0`.
+    P0 : array_like, shape (4, 4)
+        Initial covariance matrix.
+    q : array_like, shape (4,)
+        Additive process noise defined in a continuous sense.
+        Standard deviation of the discrete noise is computed as ``q * sqrt(dt)``, where
+        ``dt`` is `time_step`.
+    measurement_sd : array_like, shape (3,)
+        Standard deviation of measurement noise.
+    rng : None, int or `numpy.random.RandomState`
+        Seed to create or already created RandomState. None (default) corresponds to
+        nondeterministic seeding.
+
+    Returns
+    -------
+    NonlinearProblemExample
+    """
+    rng = check_random_state(rng)
+    n_epochs = np.round(total_time / time_step).astype(int)
+    time = time_step * np.arange(n_epochs)
+    phase = (2 * np.pi * time[:, None] / rph_change_period +
+             np.deg2rad(rph_change_phase_offset))
+    rph = (np.atleast_2d(rph_mean) +
+           np.atleast_2d(rph_change_amplitude) * np.sin(phase))
+    mn, me, md = magnetic_field_n
+
+    q = np.asarray(q)
+    n_noises = np.sum(q > 0)
+    G = np.zeros((4, n_noises))
+    G[q > 0, np.arange(n_noises)] = 1
+    Q = np.diag(q[q > 0] ** 2)
+
+    def f(k, X, W=None, with_jacobian=True):
+        X = np.array(X)
+        X[0] += (rph[k+1, 2] - rph[k, 2])
+        F = np.eye(4, 4)
+        wk = G @ W if W is not None else 0
+        return (X + wk, F, G) if with_jacobian else X + wk
+
+    def h(k, X, with_jacobian=True):
+        rph_deg = np.array(rph[k])
+        rph_deg[2] = X[0]
+        C_nb = Rotation.from_euler('xyz', rph_deg, degrees=True).as_matrix()
+        Z = C_nb.T @ magnetic_field_n + X[1:]
+        rph_rad = np.deg2rad(rph_deg)
+
+        sr = np.sin(rph_rad[0])
+        cr = np.cos(rph_rad[0])
+        sp = np.sin(rph_rad[1])
+        cp = np.cos(rph_rad[1])
+        sh = np.sin(rph_rad[2])
+        ch = np.cos(rph_rad[2])
+
+        H = np.zeros((3, 4))
+        H[0, 0] = me*ch*cp - mn*sh*cp
+        H[1, 0] = me*(-sh*cr + sp*sr*cr) + mn*(-sh*sp*sr - ch*cr)
+        H[2, 0] = me*( sh*sr + sp*ch*cr) + mn*(-sh*sp*cr + sr*ch)
+        H = np.deg2rad(H)
+        H[:, 1:] = np.eye(3)
+
+        return (Z, H) if with_jacobian else Z
+
+    X0t = np.zeros(4)
+    X0t[0] = rph[0, 2]
+    X0t[1:] = mag_bias
+
+    X = X0t
+    Xt = np.empty((n_epochs, 4))
+    Wt = np.empty((n_epochs - 1, n_noises))
+    R = np.diag(measurement_sd)**2
+    Z = []
+    measurement_epochs = np.arange(n_epochs)
+
+    for k in range(n_epochs):
+        Xt[k] = X
+        vk = rng.multivariate_normal(np.zeros(len(R)), R)
+        Z.append(h(k, X, with_jacobian=False) + vk)
 
         if k + 1 < n_epochs:
             if len(Q) > 0:
