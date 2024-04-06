@@ -77,7 +77,7 @@ def test_linear_equivalence():
         result = algorithm(p_nl.X0, p_nl.P0, p_nl.f, p_nl.Q, p_nl.measurements,
                            p_nl.n_epochs, **options)
         difference = result.X - kf_result.xf
-        assert np.all(np.abs(difference) < 1e-15)
+        assert np.all(np.abs(difference) < 2e-15)
 
     result_opt = dyne.run_optimization(p_nl.X0, p_nl.P0, p_nl.f, p_nl.Q,
                                        p_nl.measurements, p_nl.n_epochs)

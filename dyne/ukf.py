@@ -5,6 +5,46 @@ from .util import Bunch
 from ._common import check_input_arrays, check_measurements
 
 
+def generate_sigma_points(P_blocks, alpha):
+    """Generate sigma-points which represent a given covariance matrix.
+
+    The covariance matrix is assumed to be block-diagonal, with blocks given in
+    `P_blocks`.
+
+    The sigma-points are computed from the eigen decomposition. The negative
+    eigenvalues are replaced by zeros, which makes the algorithm robust for
+    marginally indefinite (due to rounding errors) matrices.
+
+    Parameters
+    ----------
+    P_blocks : list of ndarray
+        Diagonal blocks of the covariance matrix.
+    alpha : float
+        Scaling factor for the eigenvectors.
+
+    Returns
+    ------
+    sigma_points : ndarray, shape (2 * n, n)
+        Generated sigma-points. Each of 2 * n rows represents a single point with n
+        components, where n is the total number of rows or columns of the covariance
+        matrix.
+    w_mean : float
+        Weights (equal for each point) to compute the sample mean.
+    w_cov : float
+        Weights (equal for each point) to compute the sample covariance.
+    """
+    root_blocks = []
+    for P in P_blocks:
+        if len(P) > 0:
+            s, V = linalg.eigh(P)
+            s[s < 0] = 0
+            root_blocks.append(V * s ** 0.5)
+    n_states = sum(len(P) for P in P_blocks)
+    P_root = linalg.block_diag(*root_blocks)
+    return (alpha * n_states ** 0.5 * np.hstack((P_root, -P_root)).T,
+            1 / (2 * n_states), 1 / (2 * alpha ** 2 * n_states))
+
+
 def run_ukf(X0, P0, f, Q, measurements, n_epochs, alpha=1.0):
     """Run Unscented Kalman Filter.
 
@@ -71,23 +111,20 @@ def run_ukf(X0, P0, f, Q, measurements, n_epochs, alpha=1.0):
         for epochs, Z, h, R in measurements:
             index = np.searchsorted(epochs, k)
             if index < len(epochs) and epochs[index] == k:
-                Sigma = alpha * np.sqrt(n_states) * linalg.cholesky(P[k])
+                sigma_points, w_mean, w_cov = generate_sigma_points([P[k]], alpha)
                 Z_probe = []
                 X_probe = []
-                # Default scipy cholesky gives U such that P = U^T U,
-                # we need to add columns of U^T or rows of U
-                for sigma in Sigma:
-                    for sign in [-1, 1]:
-                        X_probe.append(X[k] + sign * sigma)
-                        Z_probe.append(h(k, X_probe[-1], with_jacobian=False))
+                for point in sigma_points:
+                    X_probe.append(X[k] + point)
+                    Z_probe.append(h(k, X_probe[-1], with_jacobian=False))
                 Z_probe = np.asarray(Z_probe)
-                Z_pred = np.mean(Z_probe, axis=0)
+                Z_pred = w_mean * np.sum(Z_probe, axis=0)
                 Z_probe -= Z_pred
 
                 X_probe = np.asarray(X_probe)
                 X_probe -= X[k]
 
-                P_ee = Z_probe.T @ Z_probe / (alpha**2 * len(Z_probe)) + R[index]
+                P_ee = w_cov * Z_probe.T @ Z_probe + R[index]
                 P_zx = Z_probe.T @ X_probe / (alpha**2 * len(Z_probe))
                 K = linalg.cho_solve(linalg.cho_factor(P_ee), P_zx).T
 
@@ -95,16 +132,14 @@ def run_ukf(X0, P0, f, Q, measurements, n_epochs, alpha=1.0):
                 P[k] -= K @ P_ee @ K.T
 
         if k + 1 < n_epochs:
-            Sigma = alpha * np.sqrt(n_states + n_noises) * linalg.block_diag(
-                linalg.cholesky(P[k]), linalg.cholesky(Q[k]))
+            sigma_points, w_mean, w_cov = generate_sigma_points([P[k], Q[k]], alpha)
             X_probe = []
-            for sigma in Sigma:
-                for sign in [-1, 1]:
-                    X_probe.append(f(k, X[k] + sign * sigma[:n_states],
-                                     sign * sigma[n_states:], with_jacobian=False))
+            for point in sigma_points:
+                X_probe.append(f(k, X[k] + point[:n_states], point[n_states:],
+                                 with_jacobian=False))
             X_probe = np.asarray(X_probe)
-            X[k + 1] = np.mean(X_probe, axis=0)
+            X[k + 1] = w_mean * np.sum(X_probe, axis=0)
             X_probe -= X[k + 1]
-            P[k + 1] = X_probe.T @ X_probe / (alpha**2 * len(X_probe))
+            P[k + 1] = w_cov * X_probe.T @ X_probe
 
     return Bunch(X=X, P=P)
